@@ -41,29 +41,27 @@ export default function App() {
 
   return (
     <>
-      <StarField />
+      <StarField count={380} mouseParallax />
+      <ProgressBar progress={progress} />
+      <NavDots active={activeSection} />
+      <MusicPlayer
+          activeSection={activeSection}
+        playing={playing}
+        onToggle={toggleMusic}
+        volume={volume}
+        onVolumeChange={setVolume}
+      />
 
-      <div style={{ position: "relative", zIndex: 1 }}>
-        <ProgressBar progress={progress} />
-        <NavDots active={activeSection} />
-        <MusicPlayer
-          playing={playing}
-          onToggle={toggleMusic}
-          volume={volume}
-          onVolumeChange={setVolume}
-        />
+      <main>
+        <Intro />
+        <SolarSystem onFact={showFact} />
+        <Phenomena   onFact={showFact} />
+        <DeepSpace />
+        <Ending onMessage={showMessage} />
+      </main>
 
-        <main>
-          <Intro />
-          <SolarSystem onFact={showFact} />
-          <Phenomena onFact={showFact} />
-          <DeepSpace />
-          <Ending onMessage={showMessage} />
-        </main>
-
-        <FactPopup fact={fact} onClose={closeFact} />
-        <MessageBox message={message} onClose={closeMessage} />
-      </div>
+      <FactPopup  fact={fact}       onClose={closeFact} />
+      <MessageBox message={message} onClose={closeMessage} />
     </>
   )
 }

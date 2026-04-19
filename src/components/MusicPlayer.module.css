@@ -1,112 +1,271 @@
-.wrap {
+/* ── Wrapper ──────────────────────────────────────────────── */
+.player {
   position: fixed;
   top: 1.25rem;
   right: 1.25rem;
-  z-index: 100;
+  z-index: 200;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0;
+  background: rgba(6, 6, 22, 0.55);
+  border: 1px solid rgba(80, 100, 160, 0.2);
+  border-radius: 50px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04);
+  transition: all 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+  overflow: hidden;
+  width: 46px;
+  height: 46px;
+  cursor: default;
 }
 
-.btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: rgba(6, 6, 24, 0.7);
-  border: 1px solid #223355;
-  color: #667799;
+.player.expanded {
+  width: 260px;
+  border-radius: 16px;
+  border-color: rgba(100, 130, 220, 0.3);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.45), 0 0 20px rgba(68,102,255,0.08), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+.player.playing {
+  border-color: rgba(100, 130, 220, 0.35);
+}
+
+/* ── Album art circle ─────────────────────────────────────── */
+.albumArt {
+  position: relative;
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+}
+
+.artInner {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #1a2855, #0a1030);
+  border: 1px solid rgba(100, 130, 220, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #7799ee;
   transition: all 0.3s;
-  backdrop-filter: blur(8px);
+  z-index: 2;
+  position: relative;
 }
 
-.btn:hover {
-  border-color: #6688aa;
-  color: #aabbcc;
-  box-shadow: 0 0 20px rgba(68, 102, 204, 0.2);
+.albumArt:hover .artInner {
+  border-color: rgba(130, 170, 255, 0.6);
+  color: #aabbff;
+  box-shadow: 0 0 12px rgba(80, 120, 255, 0.3);
 }
 
-.btn.playing {
-  border-color: #4466cc44;
-  color: #6688cc;
+/* Spinning ring */
+.spinRing {
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  border: 1px dashed rgba(80, 110, 200, 0.3);
+  transition: border-color 0.3s;
 }
 
-/* Animated bars when playing */
-.bars {
+.spinRing.spinning {
+  animation: spinRing 8s linear infinite;
+  border-color: rgba(100, 140, 255, 0.5);
+}
+
+@keyframes spinRing {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.playIcon {
+  margin-left: 2px;
+}
+
+/* ── Visualizer bars ──────────────────────────────────────── */
+.visualizer {
   display: flex;
   align-items: flex-end;
   gap: 2px;
   height: 14px;
 }
 
-.bar {
-  display: block;
-  width: 3px;
+.vizBar {
+  width: 2.5px;
   border-radius: 2px;
-  background: currentColor;
-  animation: musicPulse 0.9s ease-in-out infinite;
-  animation-delay: calc(var(--i) * 0.15s);
+  background: #7799ee;
+  animation: vizAnim 0.7s ease-in-out infinite alternate;
+  animation-delay: calc(var(--i) * 0.12s);
 }
 
-.bar:nth-child(1) { height: 6px; }
-.bar:nth-child(2) { height: 12px; }
-.bar:nth-child(3) { height: 9px; }
-.bar:nth-child(4) { height: 5px; }
+.vizBar:nth-child(1) { height: 5px; }
+.vizBar:nth-child(2) { height: 12px; }
+.vizBar:nth-child(3) { height: 8px; }
+.vizBar:nth-child(4) { height: 14px; }
+.vizBar:nth-child(5) { height: 6px; }
 
-@keyframes musicPulse {
-  0%, 100% { transform: scaleY(0.35); }
-  50% { transform: scaleY(1); }
+@keyframes vizAnim {
+  from { transform: scaleY(0.3); opacity: 0.6; }
+  to   { transform: scaleY(1);   opacity: 1; }
 }
 
-/* Volume slider */
-.volumeWrap {
+/* ── Track info ───────────────────────────────────────────── */
+.trackInfo {
+  flex: 1;
+  min-width: 0;
+  padding: 0 0 0 2px;
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  pointer-events: none;
+}
+
+.player.expanded .trackInfo {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: all;
+}
+
+.trackScroll {
+  overflow: hidden;
+  white-space: nowrap;
+  margin-bottom: 1px;
+}
+
+.trackTitle {
+  display: inline-block;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 400;
+  color: #c8d8ff;
+  letter-spacing: 0.03em;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.slideOut {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.slideIn {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.trackArtist {
+  display: block;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.68rem;
+  color: #4a6080;
+  letter-spacing: 0.08em;
+  margin-bottom: 5px;
+}
+
+/* Mini progress bar */
+.progressWrap {
+  height: 2px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.progressBar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #4466ff, #8844ff);
+  border-radius: 2px;
+}
+
+.progressBar.progPlaying {
+  animation: progressLoop 30s linear infinite;
+}
+
+@keyframes progressLoop {
+  from { width: 0%; }
+  to   { width: 100%; }
+}
+
+/* ── Controls ─────────────────────────────────────────────── */
+.controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px 8px 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  flex-shrink: 0;
+}
+
+.player.expanded .controls {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.controlBtn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(100, 130, 200, 0.2);
+  color: #7799cc;
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: rgba(6, 6, 24, 0.8);
-  border: 1px solid #223355;
-  border-radius: 20px;
-  padding: 6px 14px;
-  backdrop-filter: blur(8px);
-  animation: fadeIn 0.2s ease;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.25s;
+  padding: 0;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateX(8px); }
-  to { opacity: 1; transform: translateX(0); }
+.controlBtn:hover {
+  background: rgba(80, 110, 200, 0.2);
+  border-color: rgba(130, 160, 255, 0.4);
+  color: #aabbff;
+  transform: scale(1.1);
 }
 
-.slider {
-  width: 80px;
+/* Volume row */
+.volumeGroup {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #445566;
+}
+
+.volSlider {
+  width: 52px;
   height: 3px;
   -webkit-appearance: none;
+  appearance: none;
+  border-radius: 2px;
   background: linear-gradient(
     to right,
-    #4466cc var(--value, 50%),
-    #223355 var(--value, 50%)
+    #4466cc var(--vol, 50%),
+    rgba(255,255,255,0.1) var(--vol, 50%)
   );
-  border-radius: 2px;
   outline: none;
   cursor: pointer;
 }
 
-.slider::-webkit-slider-thumb {
+.volSlider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: #6688cc;
   cursor: pointer;
-  box-shadow: 0 0 6px rgba(102, 136, 204, 0.5);
+  box-shadow: 0 0 5px rgba(100,140,220,0.5);
 }
 
-.volLabel {
-  font-family: 'Outfit', system-ui, sans-serif;
-  font-size: 0.68rem;
-  color: #445577;
-  min-width: 28px;
-  text-align: right;
+/* ── Mobile ───────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .player.expanded { width: 220px; }
+  .volSlider { width: 40px; }
 }
