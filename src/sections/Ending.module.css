@@ -1,5 +1,5 @@
 .ending {
-  background: radial-gradient(ellipse at center, #060520 0%, #000002 75%);
+  background: radial-gradient(ellipse at center, rgba(6,5,32,0.78) 0%, rgba(0,0,2,0.55) 75%);
   text-align: center;
   overflow: hidden;
 }
@@ -59,7 +59,7 @@
   font-family: 'Cormorant Garamond', serif;
   font-size: clamp(2.2rem, 5vw, 4rem);
   font-weight: 300;
-  color: #8899cc;
+  color: #aabbee;
   line-height: 1.15;
   margin-bottom: 2rem;
   letter-spacing: 0.02em;
@@ -67,7 +67,7 @@
 
 .title em {
   font-style: italic;
-  color: #5566aa;
+  color: #8899cc;
   display: block;
   font-size: 0.8em;
 }
@@ -75,7 +75,7 @@
 .sub {
   font-family: 'Outfit', system-ui, sans-serif;
   font-size: 0.9rem;
-  color: #2c3d55;
+  color: #6a8090;
   line-height: 2;
   font-weight: 300;
   margin-bottom: 3.5rem;
@@ -138,6 +138,6 @@
   font-family: 'Cormorant Garamond', serif;
   font-size: 0.95rem;
   font-style: italic;
-  color: #1e2a38;
+  color: #556677;
   letter-spacing: 0.06em;
 }

@@ -1,5 +1,5 @@
 .solar {
-  background: radial-gradient(ellipse at 15% 50%, #08142a 0%, #000008 60%);
+  background: radial-gradient(ellipse at 15% 50%, rgba(8,20,42,0.78) 0%, rgba(0,0,8,0.55) 60%);
   overflow: hidden;
   gap: 3rem;
 }

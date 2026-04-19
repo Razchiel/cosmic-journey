@@ -1,5 +1,5 @@
 .intro {
-  background: radial-gradient(ellipse at 50% 60%, #080828 0%, #000008 65%);
+  background: radial-gradient(ellipse at 50% 60%, rgba(8,8,40,0.75) 0%, rgba(0,0,8,0.55) 65%);
   text-align: center;
   gap: 0;
 }

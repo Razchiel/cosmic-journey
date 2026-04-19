@@ -1,5 +1,5 @@
 .deepspace {
-  background: #000003;
+  background: rgba(0,0,3,0.60);
   gap: 3rem;
   position: relative;
 }
@@ -15,7 +15,7 @@
 
 .infinity {
   font-size: 3.5rem;
-  color: #1a2535;
+  color: #3a5070;
   animation: infinityPulse 10s ease-in-out infinite;
   position: relative;
   z-index: 2;
@@ -23,8 +23,8 @@
 }
 
 @keyframes infinityPulse {
-  0%, 100% { opacity: 0.3; transform: scale(1); color: #1a2535; }
-  50% { opacity: 0.7; transform: scale(1.08); color: #2a3a50; }
+  0%, 100% { opacity: 0.3; transform: scale(1); color: #3a5070; }
+  50% { opacity: 0.9; transform: scale(1.08); color: #5a7a96; }
 }
 
 .infinityRing {
@@ -60,7 +60,7 @@
   font-family: 'Cormorant Garamond', serif;
   font-size: clamp(1.8rem, 4vw, 3rem);
   font-weight: 200;
-  color: #1e2d3e;
+  color: #6a8aaa;
   letter-spacing: 0.2em;
   margin-bottom: 2.5rem;
 }
@@ -76,7 +76,7 @@
   font-size: clamp(0.95rem, 2vw, 1.1rem);
   font-weight: 300;
   font-style: italic;
-  color: #1c2a38;
+  color: #5a7a96;
   line-height: 1.9;
   opacity: 0;
   transform: translateY(12px);
@@ -88,9 +88,9 @@
   transform: translateY(0);
 }
 
-.line:nth-child(5) { color: #1e2f40; }
+.line:nth-child(5) { color: #6a8aaa; }
 .line:nth-child(6) {
-  color: #263848;
+  color: #7a9ab6;
   margin-top: 0.6rem;
   font-style: normal;
   font-weight: 300;

@@ -1,6 +1,5 @@
 /* ============================================================
-   COSMIC JOURNEY — Global Styles
-   Fonts: Cormorant Garamond (display) + Outfit (body)
+   COSMIC JOURNEY — Global Styles (Updated: brighter palette)
    ============================================================ */
 
 *, *::before, *::after {
@@ -13,26 +12,29 @@
   --font-display: 'Cormorant Garamond', Georgia, serif;
   --font-body: 'Outfit', system-ui, sans-serif;
 
-  /* Space palette */
-  --void: #3a3a81;
-  --deep: #30308b;
-  --nebula-dark: #0c023e;
-  --blue-dim: #0a1428;
-  --blue-mid: #1a2d5a;
-  --star-white: #ffffff;
-  --star-dim: #aabbee;
-  --star-muted: #7788aa;
-  --accent-blue: #4466ff;
-  --accent-purple: #8844ff;
-  --accent-pink: #ff44aa;
-  --accent-gold: #ffcc44;
-  --accent-teal: #44ffcc;
-  --glow-blue: rgba(68, 102, 255, 0.3);
-  --glow-purple: rgba(136, 68, 255, 0.25);
-  --glow-pink: rgba(255, 68, 170, 0.25);
+  /* Space palette — lebih terang dari sebelumnya */
+  --void:        #02021a;        /* was #000008 */
+  --deep:        #05051f;        /* was #00000f */
+  --nebula-dark: #080824;        /* was #04020e */
+  --blue-dim:    #0e1e42;        /* was #0a1428 */
+  --blue-mid:    #1e3566;        /* was #1a2d5a */
+
+  --star-white:  #f0f4ff;        /* was #e8eeff — lebih putih */
+  --star-dim:    #a0b4dd;        /* was #8899cc — lebih terang */
+  --star-muted:  #6677aa;        /* was #445577 — lebih terang */
+
+  --accent-blue:   #5577ff;      /* was #4466ff */
+  --accent-purple: #9955ff;      /* was #8844ff */
+  --accent-pink:   #ff55bb;      /* was #ff44aa */
+  --accent-gold:   #ffdd55;      /* was #ffcc44 */
+  --accent-teal:   #55ffdd;      /* was #44ffcc */
+
+  --glow-blue:   rgba(85, 119, 255, 0.35);   /* was 0.3 */
+  --glow-purple: rgba(153, 85, 255, 0.30);   /* was 0.25 */
+  --glow-pink:   rgba(255, 85, 187, 0.30);   /* was 0.25 */
 
   --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-out:    cubic-bezier(0, 0, 0.2, 1);
 }
 
 html {
@@ -49,19 +51,13 @@ body {
   cursor: crosshair;
 }
 
-/* Scrollbar */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: var(--void); }
 ::-webkit-scrollbar-thumb { background: var(--blue-mid); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent-blue); }
 
-/* Selection */
-::selection {
-  background: var(--glow-blue);
-  color: var(--star-white);
-}
+::selection { background: var(--glow-blue); color: var(--star-white); }
 
-/* Section base */
 .cosmic-section {
   position: relative;
   min-height: 100vh;
@@ -71,9 +67,10 @@ body {
   justify-content: center;
   padding: 5rem 2rem;
   overflow: hidden;
+  isolation: isolate;
 }
 
-/* Typography system */
+/* Typography */
 .t-label {
   font-family: var(--font-body);
   font-size: 0.7rem;
@@ -97,12 +94,10 @@ body {
   color: var(--star-dim);
 }
 
-/* Glow text */
-.glow-blue { text-shadow: 0 0 30px var(--glow-blue); color: #88aaff; }
-.glow-purple { text-shadow: 0 0 30px var(--glow-purple); color: #bb88ff; }
-.glow-pink { text-shadow: 0 0 30px var(--glow-pink); color: #ff88cc; }
+.glow-blue   { text-shadow: 0 0 30px var(--glow-blue);   color: #99bbff; }
+.glow-purple { text-shadow: 0 0 30px var(--glow-purple);  color: #cc99ff; }
+.glow-pink   { text-shadow: 0 0 30px var(--glow-pink);    color: #ff99dd; }
 
-/* Button base */
 button {
   cursor: pointer;
   font-family: var(--font-body);
@@ -113,11 +108,10 @@ button {
   color: inherit;
 }
 
-/* Noise texture overlay */
 .noise-overlay {
   position: absolute;
   inset: 0;
-  opacity: 0.03;
+  opacity: 0.025;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   pointer-events: none;
   z-index: 1;
