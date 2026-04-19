@@ -1,0 +1,143 @@
+.ending {
+  background: radial-gradient(ellipse at center, #060520 0%, #000002 75%);
+  text-align: center;
+  overflow: hidden;
+}
+
+.bgGradient {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 50% 50% at 50% 50%, rgba(100, 60, 200, 0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* Orbiting star ring */
+.starRing {
+  position: absolute;
+  width: 340px;
+  height: 340px;
+  border-radius: 50%;
+  border: 1px solid rgba(80, 60, 140, 0.1);
+  animation: ringRotate 60s linear infinite;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+@keyframes ringRotate {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+.starDot {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(120, 100, 200, 0.5);
+  top: 50%;
+  left: 50%;
+  transform-origin: 0 0;
+  transform: rotate(var(--angle)) translateX(168px) translateY(-1.5px);
+  animation: starDotPulse 3s ease-in-out infinite;
+  animation-delay: var(--delay);
+}
+
+@keyframes starDotPulse {
+  0%, 100% { opacity: 0.3; transform: rotate(var(--angle)) translateX(168px) translateY(-1.5px) scale(1); }
+  50% { opacity: 1; transform: rotate(var(--angle)) translateX(168px) translateY(-1.5px) scale(1.8); }
+}
+
+.content {
+  position: relative;
+  z-index: 2;
+  max-width: 600px;
+}
+
+.title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(2.2rem, 5vw, 4rem);
+  font-weight: 300;
+  color: #8899cc;
+  line-height: 1.15;
+  margin-bottom: 2rem;
+  letter-spacing: 0.02em;
+}
+
+.title em {
+  font-style: italic;
+  color: #5566aa;
+  display: block;
+  font-size: 0.8em;
+}
+
+.sub {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.9rem;
+  color: #2c3d55;
+  line-height: 2;
+  font-weight: 300;
+  margin-bottom: 3.5rem;
+}
+
+.messageBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 1rem;
+  background: transparent;
+  border: 1px solid rgba(100, 60, 180, 0.4);
+  color: #8866cc;
+  padding: 1rem 2.8rem;
+  border-radius: 50px;
+  cursor: pointer;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.9rem;
+  font-weight: 300;
+  letter-spacing: 0.15em;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 30px rgba(100, 60, 180, 0.1);
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 3.5rem;
+}
+
+.messageBtn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(100, 60, 200, 0.12), transparent);
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+.messageBtn:hover {
+  border-color: rgba(160, 100, 255, 0.65);
+  color: #ccaaff;
+  box-shadow: 0 0 60px rgba(120, 60, 220, 0.3);
+  transform: scale(1.04) translateY(-2px);
+}
+
+.messageBtn:hover::before { opacity: 1; }
+
+.btnStar {
+  font-size: 0.7rem;
+  opacity: 0.6;
+  animation: starSpin 4s linear infinite;
+}
+
+.btnStar:last-child { animation-direction: reverse; }
+
+@keyframes starSpin {
+  from { opacity: 0.4; }
+  50% { opacity: 1; }
+  to { opacity: 0.4; }
+}
+
+.footer {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 0.95rem;
+  font-style: italic;
+  color: #1e2a38;
+  letter-spacing: 0.06em;
+}
