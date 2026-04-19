@@ -1,0 +1,103 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 8, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  backdrop-filter: blur(6px);
+  animation: fadeIn 0.4s ease;
+  padding: 1.5rem;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.card {
+  background: rgba(4, 4, 20, 0.98);
+  border: 1px solid #1a2d50;
+  border-radius: 20px;
+  padding: 3rem 2.5rem;
+  max-width: 460px;
+  width: 100%;
+  text-align: center;
+  animation: slideUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 0 80px rgba(68, 102, 255, 0.08), 0 40px 80px rgba(0, 0, 0, 0.6);
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(30px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.deco {
+  font-size: 1.8rem;
+  color: #6644aa;
+  margin-bottom: 1rem;
+  animation: glowPulse 2.5s ease-in-out infinite;
+  display: block;
+}
+
+@keyframes glowPulse {
+  0%, 100% { text-shadow: 0 0 15px rgba(102, 68, 170, 0.5); }
+  50% { text-shadow: 0 0 35px rgba(136, 68, 255, 0.9), 0 0 70px rgba(136, 68, 255, 0.3); }
+}
+
+.label {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: #334466;
+  margin-bottom: 2rem;
+}
+
+.text {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.35rem;
+  font-weight: 300;
+  font-style: italic;
+  color: #aabbdd;
+  line-height: 1.85;
+  min-height: 4rem;
+}
+
+.cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  background: #6644aa;
+  margin-left: 2px;
+  vertical-align: middle;
+  animation: blink 0.8s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.closeBtn {
+  margin-top: 2.5rem;
+  background: transparent;
+  border: 1px solid #2a3d5a;
+  color: #556688;
+  padding: 0.65rem 2rem;
+  border-radius: 50px;
+  cursor: pointer;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 300;
+  letter-spacing: 0.12em;
+  transition: all 0.3s;
+  animation: fadeIn 0.5s ease;
+}
+
+.closeBtn:hover {
+  border-color: #4466aa;
+  color: #8899bb;
+  box-shadow: 0 0 20px rgba(68, 102, 170, 0.15);
+}

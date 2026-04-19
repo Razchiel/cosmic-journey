@@ -1,0 +1,112 @@
+.wrap {
+  position: fixed;
+  top: 1.25rem;
+  right: 1.25rem;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(6, 6, 24, 0.7);
+  border: 1px solid #223355;
+  color: #667799;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  backdrop-filter: blur(8px);
+}
+
+.btn:hover {
+  border-color: #6688aa;
+  color: #aabbcc;
+  box-shadow: 0 0 20px rgba(68, 102, 204, 0.2);
+}
+
+.btn.playing {
+  border-color: #4466cc44;
+  color: #6688cc;
+}
+
+/* Animated bars when playing */
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+
+.bar {
+  display: block;
+  width: 3px;
+  border-radius: 2px;
+  background: currentColor;
+  animation: musicPulse 0.9s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 0.15s);
+}
+
+.bar:nth-child(1) { height: 6px; }
+.bar:nth-child(2) { height: 12px; }
+.bar:nth-child(3) { height: 9px; }
+.bar:nth-child(4) { height: 5px; }
+
+@keyframes musicPulse {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1); }
+}
+
+/* Volume slider */
+.volumeWrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(6, 6, 24, 0.8);
+  border: 1px solid #223355;
+  border-radius: 20px;
+  padding: 6px 14px;
+  backdrop-filter: blur(8px);
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.slider {
+  width: 80px;
+  height: 3px;
+  -webkit-appearance: none;
+  background: linear-gradient(
+    to right,
+    #4466cc var(--value, 50%),
+    #223355 var(--value, 50%)
+  );
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #6688cc;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(102, 136, 204, 0.5);
+}
+
+.volLabel {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.68rem;
+  color: #445577;
+  min-width: 28px;
+  text-align: right;
+}
