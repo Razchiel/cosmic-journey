@@ -85,3 +85,18 @@ struktur-project.txt
 # Jika ada arsip ZIP dalam subfolder, juga abaikan
 **/*.zip
 
+
+# Semua file dan folder terkait context
+*context*
+*Context*
+
+# File perencanaan dan struktur project
+phase.txt
+00_master_context.txt
+01_phase_tasks.txt
+struktur-project.txt
+
+# Semua file ZIP
+*.zip
+
+
