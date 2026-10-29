@@ -1,0 +1,59 @@
+=====================================================================
+FASE 8: Fondasi keterbacaan (token + kedalaman starfield)
+=====================================================================
+Belum menyentuh CSS tiap section. Hanya fondasi.
+1. Di src/index.css, buat token tipografi dan warna terpusat: warna teks utama, sekunder, muted (tidak boleh lebih redup dari sekitar #9fb0d4), aksen, serta skala ukuran (judul, isi, label, teks kecil) dan weight. Target kontras minimal 4.5:1 untuk teks kecil di atas latar gelap. Tambahkan token text-shadow gelap berlapis tipis (bukan glow warna) untuk teks di atas bintang.
+2. StarField: tambah prop "depth" (0 sampai 1) yang dibaca lewat ref di loop gambar, bukan state per frame. Makin tinggi depth: canvas lebih redup, jumlah bintang yang digambar berkurang (sisa kebanyakan yang redup), halo bintang terang mengecil, kedip melambat. Sisakan lantai kecerahan sekitar 25 sampai 35%. Perubahan nilai harus mulus (sekitar 1,5 sampai 2 detik), tidak melompat.
+3. App.jsx: peta section ke depth. Intro 0, Solar 0.2, Phenomena 0.4, Wishing 0.45, Ending 0.55, DeepSpace 0.7, Gallery dan Secret 0.8. Hormati prefers-reduced-motion (kedip dihentikan, tetap ikut depth). Siapkan hook untuk mode Comfort (geser satu tingkat lebih redup), belum ada UI-nya.
+4. HomeWarp: saat warp pulang, bintang kembali terang mengikuti kilatan menuju Bumi.
+5. Jangan mengubah latar semi-transparan tiap section dulu (dikerjakan Fase 9). Catat section mana yang berisiko "ganda redup".
+Keluaran: file berubah lengkap + ringkasan + daftar section berisiko ganda redup + checklist tes manual.
+
+=====================================================================
+FASE 9: Terapkan token ke seluruh situs
+=====================================================================
+Pakai token Fase 8. Tanpa fitur baru. Saran: bagi menjadi 9A (Intro, SolarSystem, Phenomena, DeepSpace + UniverseScale), 9B (Ending, Wishing, WishForm, SecretEnding, Gallery, FactPopup, MessageBox, MusicPlayer, NavDots).
+1. Ganti warna teks hardcoded yang redup dengan token. Teks kecil minimal 0.75rem, paragraf minimal 1rem di HP, weight 400 untuk teks kecil. Label huruf kapital berspasi lebar dikurangi kerapatannya.
+2. Beri scrim gradien gelap halus (tidak terlihat sebagai kotak) di belakang blok teks utama tiap section. Gallery: scrim hanya untuk header.
+3. Sederhanakan latar semi-transparan section agar tidak "ganda redup" dengan depth starfield.
+4. Lebar baris paragraf 45 sampai 70 karakter, jarak antarbaris longgar.
+5. Pastikan tampilan lama (layout, animasi, mobile 360 sampai 430px) tidak rusak.
+Keluaran: hanya file yang berubah (kode lengkap) + daftar kontras yang diperbaiki + tes manual.
+
+=====================================================================
+FASE 10: Gerbang masuk, audio mobile, teks Intro
+=====================================================================
+1. Layar gerbang singkat sebelum Intro: bintang berdenyut, tombol "Board the ship", catatan kecil "Best with sound on". Satu ketukan membuka AudioContext untuk musik dan sfx sekaligus, lalu memulai musik Intro. Gerbang tampil sekali per kunjungan, lazy-loaded, aksesibel (fokus, keyboard, reduced motion).
+2. useAudio: setelah gerbang, autoplay tidak lagi bergantung pada listener gestur yang rapuh. Tangani iOS: volume elemen audio diabaikan (fade lewat gain node), AudioContext harus running, mode senyap fisik tidak bisa dideteksi (beri petunjuk kecil bila context suspended). Pastikan HomeWarp dan "Return home" tidak memunculkan gerbang lagi.
+3. Preload musik Intro hemat data seluler, tanpa memblokir render.
+4. Ganti teks Intro: judul "Welcome aboard, astronaut." subteks "Fasten your seatbelt. Our journey begins." Boleh ada baris kecil "Kencangkan sabuk pengamanmu." sebagai sentuhan lokal. Petunjuk tombol jadi "Hold to launch". Label jarak "from home" tetap. Tanpa em dash.
+5. Jangan merusak tombol hold di Intro (pointer capture, touch-action).
+Keluaran: file berubah/baru lengkap + tes manual khusus iOS Safari dan Android Chrome.
+
+=====================================================================
+FASE 11: Copy pass anti-AI
+=====================================================================
+Hanya teks, tanpa perubahan logika. Saran: 11A (data/index.js, index.html, Intro, SolarSystem, Phenomena, DeepSpace, universeScenes), 11B (Ending, Wishing, WishForm, SecretEnding, Gallery, komponen lain, dummyWishes).
+1. Buat dulu panduan suara singkat (maks. 8 baris): kalimat pendek, konkret, satu ide per kalimat, kata sehari-hari, hangat tapi tidak berlebihan.
+2. Hapus semua em dash dan en dash di teks yang tampil (termasuk title di index.html, label "Stage I", dan string di data). Ganti dengan titik, koma, atau titik dua. Jangan diganti tanda hubung.
+3. Sisir pola khas AI: "bukan X, tapi Y", daftar tiga-tiga, metafora bertumpuk, frasa kosong. Pertahankan frasa sci-fi yang sengaja jadi gaya (mis. "DATA FRAGMENT ACQUIRED") dan sebutkan mana yang dipertahankan.
+4. Fakta sains tidak boleh berubah maknanya.
+5. Tampilkan hasil sebagai tabel: file, teks lama, teks baru, hanya untuk perubahan penting. Kode lengkap hanya untuk file yang berubah.
+Keluaran: file berubah + tabel ringkas + daftar frasa yang sengaja dipertahankan.
+
+=====================================================================
+FASE 12: Ramah pembaca
+=====================================================================
+1. MusicPlayer: default mini di HP (ikon putar + volume), bisa dibuka penuh. Tidak menutupi judul section. Perhatikan rule CSS body.hide-global-ui yang memilih class lewat potongan nama.
+2. Mode Comfort: tombol kecil yang menggeser depth starfield lebih redup, menaikkan kontras teks, dan mengurangi gerak. Disimpan di state App, tanpa localStorage (kecuali kamu setuju lain).
+3. FactPopup: durasi menyesuaikan panjang teks, tertahan saat disentuh/di-hover.
+4. MessageBox dan Phenomena: ketuk untuk menampilkan seluruh teks yang sedang diketik.
+5. Kartu Phenomena: potong deskripsi di batas kata, bukan 75 karakter.
+6. Cek jarak aman NavDots dan konten di lebar 360px untuk tiap section.
+Keluaran: file berubah lengkap + tes manual.
+
+=====================================================================
+FASE 13: QA akhir pemolesan (tanpa fitur baru)
+=====================================================================
+Audit berbasis snapshot dengan format seperti Fase 5. Periksa: kontras (daftar pasangan warna dan rasionya), konsistensi depth antar section dan saat navigasi mundur lewat NavDots, audio tidak menumpuk setelah gerbang, em dash tersisa (cari di seluruh string), alur lengkap Intro sampai Return home, performa StarField (tidak ada leak), reduced motion dan Comfort. Hal yang hanya bisa dicek di perangkat nyata masuk "Tes manual".
+Keluaran: hanya file yang diperbaiki + daftar temuan singkat.

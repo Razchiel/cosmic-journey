@@ -1,0 +1,1253 @@
+COSMIC JOURNEY: SNAPSHOT KODE (subset per fase, hemat token)
+Dibuat: 2026-10-29 14:21
+Posisi: siap untuk mengerjakan FASE 8 (Fondasi keterbacaan (token + kedalaman starfield))
+Snapshot ini hanya berisi file yang relevan untuk fase ini, kondisi TERBARU.
+File yang TIDAK tercantum di DAFTAR FILE sudah ada di proyek tetapi sengaja tidak disertakan.
+Jangan mengarang isinya; jika butuh salah satunya, minta saya mengunggahnya.
+File bertanda [CUPLIKAN] hanya berisi sebagian aturan CSS, bukan file lengkap.
+
+DAFTAR FILE (disertakan):
+- src/App.jsx
+- src/components/HomeWarp.jsx
+- src/components/StarField.jsx
+- src/index.css
+- src/sections/DeepSpace.module.css [CUPLIKAN]
+- src/sections/Ending.module.css [CUPLIKAN]
+- src/sections/Gallery.module.css [CUPLIKAN]
+- src/sections/Intro.module.css [CUPLIKAN]
+- src/sections/Phenomena.module.css [CUPLIKAN]
+- src/sections/SecretEnding.module.css [CUPLIKAN]
+- src/sections/SolarSystem.module.css [CUPLIKAN]
+- src/sections/Wishing.module.css [CUPLIKAN]
+
+FILE LAIN DI PROYEK (tidak disertakan):
+index.html, netlify.toml, package.json, vite.config.js, netlify/functions/get-wishes.js, netlify/functions/submit-wish.js, netlify/lib/shared.js, supabase/schema.sql, src/components/FactPopup.jsx, src/components/FactPopup.module.css, src/components/HomeWarp.module.css, src/components/MessageBox.jsx, src/components/MessageBox.module.css, src/components/MusicPlayer.jsx, src/components/MusicPlayer.module.css, src/components/NavDots.jsx, src/components/NavDots.module.css, src/components/ProgressBar.jsx, src/components/UniverseScale.jsx, src/components/UniverseScale.module.css, src/components/universeScenes.jsx, src/components/WarpOverlay.jsx, src/components/WarpOverlay.module.css, src/components/WishForm.jsx, src/components/WishForm.module.css, src/data/dummyWishes.js, src/data/index.js, src/hooks/useAudio.js, src/hooks/useScroll.js, src/hooks/useSfx.js, src/main.jsx, src/sections/DeepSpace.jsx, src/sections/Ending.jsx, src/sections/Gallery.jsx, src/sections/Intro.jsx, src/sections/Phenomena.jsx, src/sections/SecretEnding.jsx, src/sections/SolarSystem.jsx, src/sections/Wishing.jsx, src/services/wishes.js
+
+======================================================================
+
+===== FILE: src/App.jsx =====
+import React, { useState, useCallback, useEffect, useRef, Suspense } from 'react'
+import StarField from './components/StarField.jsx'
+import NavDots from './components/NavDots.jsx'
+import MusicPlayer from './components/MusicPlayer.jsx'
+import ProgressBar from './components/ProgressBar.jsx'
+import FactPopup from './components/FactPopup.jsx'
+import MessageBox from './components/MessageBox.jsx'
+
+// Lazy loading sections (kode three.js tidak akan diload di awal)
+const Intro = React.lazy(() => import('./sections/Intro.jsx'))
+const SolarSystem = React.lazy(() => import('./sections/SolarSystem.jsx'))
+const Phenomena = React.lazy(() => import('./sections/Phenomena.jsx'))
+const DeepSpace = React.lazy(() => import('./sections/DeepSpace.jsx'))
+const Ending = React.lazy(() => import('./sections/Ending.jsx'))
+const Wishing = React.lazy(() => import('./sections/Wishing.jsx'))
+const SecretEnding = React.lazy(() => import('./sections/SecretEnding.jsx'))
+const Gallery = React.lazy(() => import('./sections/Gallery.jsx'))
+// HomeWarp memuat three.js → lazy; dipanggil dari section mana pun lewat handleReturnHome
+const HomeWarp = React.lazy(() => import('./components/HomeWarp.jsx'))
+
+import { useAmbientAudio } from './hooks/useAudio.js'
+import { UNIVERSE_MESSAGES } from './data/index.js'
+import { resetSessionCallsign } from './services/wishes.js'
+
+// 'secret' (Secret Ending) SENGAJA tidak masuk daftar ini: bukan bagian navigasi bebas,
+// hanya terbuka lewat submit wish yang sukses. NavDots/ProgressBar memakai 'wishing' saat di 'secret'.
+const SECTION_IDS = ['intro', 'solar', 'phenomena', 'deepspace', 'ending', 'wishing', 'gallery']
+
+// Section tersembunyi yang memakai musik section lain (tanpa crossfade putus).
+// Juga dipakai untuk label MusicPlayer, supaya 'secret' tidak jatuh ke track default.
+const MUSIC_ALIAS = { secret: 'wishing' }
+
+// Dari section ini ke depan, chunk section akhir + HomeWarp diunduh di latar belakang
+const PRELOAD_FROM = new Set(['deepspace', 'ending', 'wishing', 'secret', 'gallery'])
+
+// State pengunjung (in-memory saja — sengaja TIDAK disimpan di localStorage/server)
+// Diisi Ending saat reveal, dibaca Wishing, Secret Ending & Gallery. Direset setelah pulang ke Bumi.
+const INITIAL_VISITOR = {
+  name: '',                // nama penerima konstelasi
+  sender: '',              // pengirim (hanya mode "For Someone Else")
+  constellationPoints: [],
+  finalMessage: '',
+  coords: '',
+  wishSubmitted: false,
+  mySubmission: null,      // data kiriman wish pengunjung ini (untuk highlight "Your wish")
+  skipped: false,          // true = Wishing di-skip langsung ke Gallery (tidak membuka Secret Ending)
+  secretSeen: false,       // true = sinematik Secret Ending sudah selesai/di-skip (kunjungan ulang tampil langsung)
+}
+
+const HOME_END_PAD = 800 // jeda setelah pindah ke intro sebelum overlay HomeWarp dilepas
+// (HomeWarp.jsx: T_LEAVE bergantung pada angka ini, lihat catatan di sana)
+
+// Perjalanan Bumi (intro → solar): Bumi menjauh & mengecil ke posisinya di tata surya
+const TRAVEL_MS = 2800 // dari tombol penuh sampai section berganti
+const ARRIVE_MS = 1000 // jeda sampai UI global muncul lagi
+
+// Transisi gelap-terang untuk perpindahan section selain intro → solar
+const FADE_OUT = 700
+const FADE_IN = 800
+
+export default function App() {
+  const [fact, setFact] = useState(null)
+  const [message, setMessage] = useState(null)
+
+  const [activeSection, setActiveSection] = useState('intro')
+  const [renderedSection, setRenderedSection] = useState('intro')
+  const [fadeState, setFadeState] = useState('visible')
+  const navTimer = useRef(0) // timer pergantian section (dibatalkan jika ada perpindahan baru)
+
+  // Perjalanan intro → solar: 'idle' → 'warp' → 'idle'
+  const [warp, setWarp] = useState({ phase: 'idle', startTime: 0 })
+  const warpingRef = useRef(false)
+
+  const [fadePhase, setFadePhase] = useState('idle')
+
+  const [visitor, setVisitor] = useState(INITIAL_VISITOR)
+  const updateVisitor = useCallback((patch) => setVisitor((v) => ({ ...v, ...patch })), [])
+  // true = Ending langsung membuka pesan konstelasi (dari Secret Ending: "Stay with my constellation")
+  const [resumeMessage, setResumeMessage] = useState(false)
+
+  const [homeWarping, setHomeWarping] = useState(false)
+  const homeTimers = useRef([])
+
+  const {
+    playing,
+    toggleMusic,
+    volume,
+    setVolume,
+    changeSection,
+    getAudioData,
+    audioProgress,
+  } = useAmbientAudio()
+
+  const handleNavigate = useCallback((id) => {
+    setFact(null)
+    setMessage(null)
+    if (id === activeSection) return
+    if (id !== 'ending') setResumeMessage(false)
+    setActiveSection(id)
+    setFadeState('hidden')
+    changeSection(MUSIC_ALIAS[id] ?? id)
+
+    // Perpindahan cepat beruntun: hanya tujuan terakhir yang dirender (tanpa kilatan section perantara)
+    clearTimeout(navTimer.current)
+    navTimer.current = setTimeout(() => {
+      setRenderedSection(id)
+      setFadeState('visible')
+    }, 400)
+  }, [activeSection, changeSection])
+
+  // NavDots: diabaikan selama transisi / HomeWarp (tombol tetap bisa dijangkau keyboard walau tersembunyi)
+  const handleNavDot = useCallback((id) => {
+    if (warpingRef.current) return
+    handleNavigate(id)
+  }, [handleNavigate])
+
+  // Dipanggil Intro saat tombol tahan penuh: Intro menganimasikan Bumi, App mengganti section
+  const handleWarpNavigate = useCallback((id) => {
+    if (warpingRef.current || id === activeSection) return
+    warpingRef.current = true
+    setFact(null)
+    setMessage(null)
+    setWarp({ phase: 'warp', startTime: Date.now() })
+
+    setTimeout(() => {
+      handleNavigate(id)
+      setTimeout(() => {
+        setWarp({ phase: 'idle', startTime: 0 })
+        warpingRef.current = false
+      }, ARRIVE_MS)
+    }, TRAVEL_MS)
+  }, [activeSection, handleNavigate])
+
+  const handleFadeNavigate = useCallback((id) => {
+    if (warpingRef.current || id === activeSection) return
+    warpingRef.current = true
+    setFact(null)
+    setMessage(null)
+    setFadePhase('dark')
+
+    setTimeout(() => {
+      handleNavigate(id)
+      setFadePhase('light')
+
+      setTimeout(() => {
+        setFadePhase('idle')
+        warpingRef.current = false
+      }, FADE_IN)
+    }, FADE_OUT)
+  }, [activeSection, handleNavigate])
+
+  // Pulang ke Bumi (HomeWarp) — bisa dipanggil dari section mana pun (mis. Secret Ending)
+  const handleReturnHome = useCallback(async () => {
+    if (warpingRef.current) return
+    warpingRef.current = true
+    setFact(null)
+    setMessage(null)
+    try {
+      const { HOME_MS } = await import('./components/HomeWarp.jsx')
+      setHomeWarping(true)
+      const t1 = setTimeout(() => {
+        handleNavigate('intro')
+        const t2 = setTimeout(() => {
+          setHomeWarping(false)
+          setVisitor(INITIAL_VISITOR) // perjalanan baru = pengunjung baru
+          resetSessionCallsign()      // callsign anonim baru untuk pengunjung berikutnya
+          warpingRef.current = false
+        }, HOME_END_PAD)
+        homeTimers.current.push(t2)
+      }, HOME_MS)
+      homeTimers.current.push(t1)
+    } catch (_) {
+      warpingRef.current = false
+    }
+  }, [handleNavigate])
+
+  // Secret Ending → "Stay with my constellation"
+  const handleBackToConstellation = useCallback(() => {
+    setResumeMessage(true)
+    handleFadeNavigate('ending')
+  }, [handleFadeNavigate])
+
+  // Wishing: wish berhasil terkirim dan animasi bintang naik selesai → Secret Ending
+  const handleWishSubmitted = useCallback(() => {
+    handleFadeNavigate('secret')
+  }, [handleFadeNavigate])
+
+  useEffect(() => () => {
+    homeTimers.current.forEach(clearTimeout)
+    clearTimeout(navTimer.current)
+  }, [])
+
+  const transitioning = warp.phase !== 'idle' || fadePhase !== 'idle' || homeWarping
+  useEffect(() => {
+    document.body.classList.toggle('hide-global-ui', transitioning)
+    return () => document.body.classList.remove('hide-global-ui')
+  }, [transitioning])
+
+  // Preload Solar System supaya perpindahan dari intro tidak tersendat
+  useEffect(() => {
+    const t = setTimeout(() => import('./sections/SolarSystem.jsx'), 1500)
+    return () => clearTimeout(t)
+  }, [])
+
+  // Preload section akhir + HomeWarp begitu pengunjung mencapai Deep Space,
+  // supaya layar tidak kosong saat pindah ke Ending / Wishing / Secret / Gallery / pulang.
+  const preloaded = useRef(false)
+  useEffect(() => {
+    if (preloaded.current || !PRELOAD_FROM.has(activeSection)) return
+    const t = setTimeout(() => {
+      preloaded.current = true
+      const quiet = () => { }
+      import('./sections/Ending.jsx').catch(quiet)
+      import('./sections/Wishing.jsx').catch(quiet)
+      import('./sections/SecretEnding.jsx').catch(quiet)
+      import('./sections/Gallery.jsx').catch(quiet)
+      import('./components/HomeWarp.jsx').catch(quiet)
+    }, 1200)
+    return () => clearTimeout(t)
+  }, [activeSection])
+
+  const showFact = useCallback((d) => setFact(d), [])
+  const closeFact = useCallback(() => setFact(null), [])
+
+  const showMessage = useCallback(() => {
+    setMessage(UNIVERSE_MESSAGES[Math.floor(Math.random() * UNIVERSE_MESSAGES.length)])
+  }, [])
+  const closeMessage = useCallback(() => setMessage(null), [])
+
+  // Secret Ending tidak punya titik sendiri di NavDots/ProgressBar → ikut 'wishing'
+  const navSection = activeSection === 'secret' ? 'wishing' : activeSection
+  const currentIdx = SECTION_IDS.indexOf(navSection)
+  const progress = Math.max(0, currentIdx / (SECTION_IDS.length - 1))
+
+  return (
+    <>
+      <StarField count={500} mouseParallax />
+      <ProgressBar progress={progress} />
+      <NavDots active={navSection} onNavigate={handleNavDot} />
+
+      <MusicPlayer
+        playing={playing}
+        onToggle={toggleMusic}
+        volume={volume}
+        onVolumeChange={setVolume}
+        activeSection={MUSIC_ALIAS[activeSection] ?? activeSection}
+        getAudioData={getAudioData}
+        audioProgress={audioProgress}
+      />
+
+      <div
+        className={`fade-overlay ${fadePhase === 'dark' ? 'fade-dark' : ''} ${fadePhase === 'light' ? 'fade-light' : ''}`}
+        style={{ '--fade-out': `${FADE_OUT}ms`, '--fade-in': `${FADE_IN}ms` }}
+        aria-hidden="true"
+      />
+
+      <main className={`section-wrapper ${fadeState}`}>
+        <Suspense fallback={null}>
+          {renderedSection === 'intro' && (
+            <Intro
+              onNext={() => handleWarpNavigate('solar')}
+              isWarping={warp.phase !== 'idle'}
+              warpStartTime={warp.startTime}
+              travelMs={TRAVEL_MS}
+            />
+          )}
+          {renderedSection === 'solar' && (
+            <SolarSystem onFact={showFact} onNext={() => handleFadeNavigate('phenomena')} />
+          )}
+          {renderedSection === 'phenomena' && (
+            <Phenomena onFact={showFact} onNext={() => handleFadeNavigate('deepspace')} />
+          )}
+          {renderedSection === 'deepspace' && (
+            <DeepSpace onFact={showFact} onNext={() => handleFadeNavigate('ending')} />
+          )}
+          {renderedSection === 'ending' && (
+            <Ending
+              visitor={visitor}
+              onReveal={updateVisitor}
+              onNext={() => handleFadeNavigate('wishing')}
+              onBackToChoices={() => handleFadeNavigate('secret')}
+              resumeMessage={resumeMessage}
+            />
+          )}
+          {renderedSection === 'wishing' && (
+            <Wishing
+              visitor={visitor}
+              onVisitorChange={updateVisitor}
+              onGallery={() => handleFadeNavigate('gallery')}
+              onSubmitted={handleWishSubmitted}
+              onBackToConstellation={handleBackToConstellation}
+              onReturnHome={handleReturnHome}
+            />
+          )}
+          {renderedSection === 'secret' && (
+            <SecretEnding
+              visitor={visitor}
+              onVisitorChange={updateVisitor}
+              onStay={handleBackToConstellation}
+              onGallery={() => handleFadeNavigate('gallery')}
+              onReturnHome={handleReturnHome}
+            />
+          )}
+          {renderedSection === 'gallery' && (
+            <Gallery
+              visitor={visitor}
+              onBackToConstellation={handleBackToConstellation}
+              onReturnHome={handleReturnHome}
+            />
+          )}
+        </Suspense>
+      </main>
+
+      {homeWarping && (
+        <Suspense fallback={null}>
+          <HomeWarp active name={visitor.name} points={visitor.constellationPoints} />
+        </Suspense>
+      )}
+
+      <FactPopup fact={fact} onClose={closeFact} />
+      <MessageBox message={message} onClose={closeMessage} />
+    </>
+  )
+}
+===== END FILE =====
+
+===== FILE: src/components/HomeWarp.jsx =====
+import { useRef, useState, useEffect, useMemo, memo } from 'react'
+import { Canvas, useFrame } from '@react-three/fiber'
+import * as THREE from 'three'
+import { sfx } from '../hooks/useSfx.js'
+import styles from './HomeWarp.module.css'
+
+// Timeline (ms)
+const T_LAUNCH = 1800    // roket mulai naik, warp mulai
+const T_COUNT = 10000    // hitung mundur "3" (lalu 2, 1 tiap 900 ms)
+const T_FLASH = 12700    // kilatan menuju Bumi
+export const HOME_MS = 13200 // dipakai App sebelum pindah ke Intro
+// Overlay mulai memudar saat Intro tampil di belakangnya.
+// App melepas overlay di HOME_MS + HOME_END_PAD (800 ms): fade 400 ms ini harus selesai sebelum itu.
+const T_LEAVE = HOME_MS + 400
+
+const COUNT = 360
+const COUNT_REDUCED = 160
+const clamp01 = (v) => Math.min(1, Math.max(0, v))
+
+// Hanya starfield (garis bintang saat warp)
+function Scene({ t0, reduce }) {
+    const count = reduce ? COUNT_REDUCED : COUNT
+    const stars = useRef()
+    const dummy = useMemo(() => new THREE.Object3D(), [])
+    const ps = useMemo(() => Array.from({ length: count }, () => ({
+        x: (Math.random() - 0.5) * 40,
+        y: (Math.random() - 0.5) * 60,
+        z: Math.random() * 13 - 14,
+    })), [count])
+
+    useFrame((state, delta) => {
+        if (!t0.current || !stars.current) return
+        const t = performance.now() - t0.current
+        const k = clamp01((t - T_LAUNCH) / 6000)
+        const s = k * k * (3 - 2 * k)
+
+        // Reduced motion: tanpa getaran kamera, garis bintang pendek dan lambat
+        if (!reduce) {
+            const amp = s * s * 0.14
+            state.camera.position.x = (Math.random() - 0.5) * amp
+            state.camera.position.y = (Math.random() - 0.5) * amp
+        }
+
+        const speed = 0.2 + s * (reduce ? 12 : 60)
+        const stretch = 1 + s * (reduce ? 8 : 110)
+        ps.forEach((p, i) => {
+            p.y -= speed * delta
+            if (p.y < -30) { p.y = 30; p.x = (Math.random() - 0.5) * 40 }
+            dummy.position.set(p.x, p.y, p.z)
+            dummy.scale.set(1, stretch, 1)
+            dummy.updateMatrix()
+            stars.current.setMatrixAt(i, dummy.matrix)
+        })
+        stars.current.instanceMatrix.needsUpdate = true
+    })
+
+    return (
+        <instancedMesh ref={stars} args={[null, null, count]} frustumCulled={false}>
+            <boxGeometry args={[0.025, 0.025, 0.025]} />
+            <meshBasicMaterial color="#e0f0ff" transparent opacity={0.8} />
+        </instancedMesh>
+    )
+}
+
+// Roket 2D: mengapung & bergoyang → api menyala → berdiri tegak & naik perlahan
+function Rocket2D({ t0, reduce }) {
+    const body = useRef()
+    const flame = useRef()
+
+    useEffect(() => {
+        let raf = 0
+        const j = reduce ? 0 : 1   // 0 = tanpa goyang, getar, dan kedip api
+        const loop = () => {
+            const t = performance.now() - t0.current
+            const lk = clamp01((t - T_LAUNCH) / (T_FLASH - T_LAUNCH - 800))
+            const rise = lk * lk * (3 - 2 * lk)                       // naik 0..1
+            const up = clamp01((t - T_LAUNCH) / 1400)
+            const upright = up * up * (3 - 2 * up)                    // tegak 0..1
+            const ig = clamp01((t - T_LAUNCH) / 900)                  // api menyala 0..1
+            const sway = Math.sin(t * 0.0016) * 10 * (1 - upright) * j
+            const bob = Math.sin(t * 0.0021) * 10 * (1 - upright) * j
+            const shake = ig * (Math.random() - 0.5) * 1.6 * j
+            const y = bob - rise * window.innerHeight * 0.3
+            if (body.current) {
+                body.current.style.transform =
+                    `translate(${shake}px, ${y}px) rotate(${sway + (1 - upright) * 6 * j}deg)`
+            }
+            if (flame.current) {
+                const len = ig * (0.75 + rise * 0.6) + (Math.random() - 0.5) * 0.16 * ig * j
+                flame.current.style.transform = `scale(${1 + (Math.random() - 0.5) * 0.1 * ig * j}, ${Math.max(len, 0.001)})`
+            }
+            raf = requestAnimationFrame(loop)
+        }
+        raf = requestAnimationFrame(loop)
+        return () => cancelAnimationFrame(raf)
+    }, [t0, reduce])
+
+    return (
+        <div className={styles.rocketWrap} aria-hidden="true">
+            <div ref={body} className={styles.rocket}>
+                <svg viewBox="0 0 80 150" className={styles.rocketSvg}>
+                    <g ref={flame} className={styles.flame} style={{ transformOrigin: '40px 108px' }}>
+                        <path d="M32 108 C32 128 38 142 40 152 C42 142 48 128 48 108Z" fill="#ff8a30" opacity="0.9" />
+                        <path d="M36 108 C36 120 39 130 40 138 C41 130 44 120 44 108Z" fill="#fff2b0" />
+                    </g>
+                    <path d="M20 74 L4 104 L20 96Z" fill="#ff5a5a" />
+                    <path d="M60 74 L76 104 L60 96Z" fill="#ff5a5a" />
+                    <path d="M30 98 L50 98 L47 109 L33 109Z" fill="#444b5e" />
+                    <path d="M40 4 C58 22 62 50 60 98 L20 98 C18 50 22 22 40 4Z" fill="#e8ecf8" />
+                    <path d="M40 4 C50 13 56 25 58 38 L22 38 C24 25 30 13 40 4Z" fill="#ff5a5a" />
+                    <circle cx="40" cy="58" r="9" fill="#6ec5ff" stroke="#aab4cc" strokeWidth="3" />
+                    <circle cx="37" cy="55" r="2.5" fill="#fff" opacity="0.7" />
+                </svg>
+            </div>
+        </div>
+    )
+}
+
+// Konstelasi nama pengguna terbentuk di langit saat roket naik
+function NameConstellation({ name, points }) {
+    if (!points?.length) return null
+    const xs = points.map((p) => p.x)
+    const ys = points.map((p) => p.y)
+    const pad = 14
+    const minX = Math.min(...xs) - pad
+    const minY = Math.min(...ys) - pad
+    const w = Math.max(...xs) - Math.min(...xs) + pad * 2
+    const h = Math.max(...ys) - Math.min(...ys) + pad * 2
+    const d = points.map((p, i) => `${i ? 'L' : 'M'}${p.x} ${p.y}`).join(' ')
+    return (
+        <div className={styles.sky}>
+            <svg viewBox={`${minX} ${minY} ${w} ${h}`} className={styles.skySvg} aria-hidden="true">
+                <path d={d} pathLength="1" className={styles.skyLine} />
+                {points.map((p, i) => (
+                    <g key={i} className={styles.skyStar} style={{ animationDelay: `${0.6 + i * 0.5}s` }}>
+                        <circle cx={p.x} cy={p.y} r="6" className={styles.skyHalo} />
+                        <circle cx={p.x} cy={p.y} r="2" fill="#fff" />
+                    </g>
+                ))}
+            </svg>
+            <p className={styles.skyLabel}>✦ {name}’s star</p>
+            <p className={styles.skyNote}>It will keep watch over your home, always.</p>
+        </div>
+    )
+}
+
+function HomeWarp({ active, name = '', points = [] }) {
+    const [phase, setPhase] = useState('float') // float | launch | count | flash
+    const [count, setCount] = useState(0)
+    const [leaving, setLeaving] = useState(false)
+    const t0 = useRef(performance.now())
+    const overlayRef = useRef(null)
+
+    const reduce = useMemo(
+        () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+        []
+    )
+
+    useEffect(() => {
+        if (!active) return
+        t0.current = performance.now()
+        setPhase('float')
+        setCount(0)
+        setLeaving(false)
+        const ids = [
+            setTimeout(() => { setPhase('launch'); sfx.warp((T_FLASH - T_LAUNCH) / 1000 + 0.4) }, T_LAUNCH),
+            ...[3, 2, 1].map((n, i) =>
+                setTimeout(() => { setPhase('count'); setCount(n); sfx.click() }, T_COUNT + i * 900)
+            ),
+            setTimeout(() => { setPhase('flash'); sfx.chime(4) }, T_FLASH),
+            setTimeout(() => setLeaving(true), T_LEAVE),
+        ]
+        return () => ids.forEach(clearTimeout)
+    }, [active])
+
+    // Fokus pindah ke overlay: tombol "Return home" di belakangnya tidak lagi menerima Enter/Spasi
+    useEffect(() => {
+        if (active) overlayRef.current?.focus({ preventScroll: true })
+    }, [active])
+
+    if (!active) return null
+
+    const nearEarth = phase === 'count' || phase === 'flash'
+
+    return (
+        <div
+            ref={overlayRef}
+            className={`${styles.overlay} ${leaving ? styles.overlayOut : ''}`}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Returning home"
+            tabIndex={-1}
+            onKeyDown={(e) => { if (e.key === 'Tab') e.preventDefault() }}
+        >
+            <div className={styles.canvasWrap} aria-hidden="true">
+                <Canvas dpr={[1, 1.5]} camera={{ position: [0, 0, 10], fov: 60 }}>
+                    <Scene t0={t0} reduce={reduce} />
+                </Canvas>
+            </div>
+
+            {phase !== 'float' && <NameConstellation name={name} points={points} />}
+            <Rocket2D t0={t0} reduce={reduce} />
+
+            <div className={`${styles.earthHorizon} ${nearEarth ? styles.earthHorizonOn : ''}`} aria-hidden="true" />
+
+            <div className={styles.caption} role="status" aria-live="polite">
+                {phase === 'float' && <p key="f" className={styles.line}>Adrift between the stars…</p>}
+                {phase === 'launch' && <p key="l" className={styles.line}>Engines awake. Taking you home{name ? `, ${name}` : ''}.</p>}
+                {phase === 'count' && (
+                    <>
+                        <p className={styles.small}>Arriving at Earth in</p>
+                        <div key={count} className={styles.count}>{count}</div>
+                    </>
+                )}
+            </div>
+
+            <div className={`${styles.flash} ${phase === 'flash' ? styles.flashOn : ''}`} aria-hidden="true" />
+        </div>
+    )
+}
+
+export default memo(HomeWarp)
+===== END FILE =====
+
+===== FILE: src/components/StarField.jsx =====
+import { useEffect, useRef, memo } from 'react'
+
+function StarField({ count = 500, mouseParallax = true }) {
+  const canvasRef = useRef(null)
+  const starsRef = useRef([])
+  const shootersRef = useRef([])
+  const mouseRef = useRef({ x: 0, y: 0 })
+  const animRef = useRef(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    let lastW = 0
+    let lastH = 0
+
+    // Layar sempit (HP) cukup dengan ±55% bintang: tampilan sama, beban jauh lebih ringan
+    const targetCount = () => (window.innerWidth < 768 ? Math.round(count * 0.55) : count)
+
+    // ── Init stars ────────────────────────────────────────
+    const initStars = () => {
+      starsRef.current = Array.from({ length: targetCount() }, () => {
+        const tier = Math.random()
+        return {
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          // Radius disesuaikan agar bintang terlihat jelas
+          r: tier > 0.92 ? Math.random() * 1.8 + 1.4   // Bintang terang
+            : tier > 0.75 ? Math.random() * 1.0 + 0.8   // Bintang sedang
+              : Math.random() * 0.6 + 0.4,  // Bintang redup
+          alpha: Math.random(),
+          speed: reduce ? 0 : Math.random() * 0.005 + 0.001,
+          phase: Math.random() * Math.PI * 2,
+          drift: reduce ? 0 : (Math.random() - 0.5) * 0.02,
+          layer: Math.floor(Math.random() * 3),
+          color: (() => {
+            const r = Math.random()
+            if (r > 0.90) return { r: 255, g: 220, b: 120 }
+            if (r > 0.80) return { r: 200, g: 180, b: 255 }
+            if (r > 0.70) return { r: 140, g: 200, b: 255 }
+            if (r > 0.60) return { r: 255, g: 180, b: 180 }
+            return { r: 210, g: 225, b: 255 }
+          })(),
+        }
+      })
+    }
+
+    // ── Resize ────────────────────────────────────────────
+    // Address bar HP naik-turun hanya mengubah TINGGI: bintang tidak dibuat ulang,
+    // posisi Y cukup diskalakan. Bintang baru dibuat hanya jika LEBAR berubah.
+    const resize = () => {
+      const w = window.innerWidth
+      const h = window.innerHeight
+      const widthChanged = w !== lastW
+      const oldH = lastH
+      lastW = w
+      lastH = h
+      canvas.width = w
+      canvas.height = h
+
+      if (!starsRef.current.length || widthChanged) {
+        initStars()
+      } else if (oldH && h !== oldH) {
+        const k = h / oldH
+        starsRef.current.forEach((s) => { s.y *= k })
+      }
+      if (reduce) draw() // loop tidak berjalan di mode reduced: gambar ulang manual
+    }
+
+    // ── Shooting stars ────────────────────────────────────
+    const spawnShooter = () => ({
+      x: Math.random() * canvas.width * 0.7,
+      y: Math.random() * canvas.height * 0.4,
+      len: Math.random() * 180 + 80,
+      speed: Math.random() * 14 + 8,
+      angle: Math.PI / 4 + (Math.random() - 0.5) * 0.3,
+      opacity: 1,
+      width: Math.random() * 1.5 + 0.5,
+      trail: [],
+    })
+
+    // Spawn shooting star setiap 3–7 detik (dimatikan saat reduced motion)
+    const shooterInterval = reduce ? 0 : setInterval(() => {
+      if (!document.hidden && shootersRef.current.length < 3) {
+        shootersRef.current.push(spawnShooter())
+      }
+    }, 3000 + Math.random() * 4000)
+
+    // ── Draw ──────────────────────────────────────────────
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      const mx = mouseRef.current.x
+      const my = mouseRef.current.y
+
+      // Draw stars
+      starsRef.current.forEach((s) => {
+        s.phase += s.speed
+        s.x += s.drift
+        if (s.x < -2) s.x = canvas.width + 2
+        if (s.x > canvas.width + 2) s.x = -2
+
+        const parallaxStr = [0.003, 0.009, 0.020][s.layer]
+        const px = s.x + mx * parallaxStr
+        const py = s.y + my * parallaxStr
+
+        // Twinkle: bintang besar lebih dramatis (reduced: kecerahan tetap)
+        const twinkle = reduce ? 0.8 : 0.3 + Math.abs(Math.sin(s.phase)) * 0.7
+        const { r, g, b } = s.color
+        const alpha = twinkle * (s.r > 1.2 ? 1 : 0.85)
+
+        ctx.beginPath()
+        ctx.arc(px, py, s.r, 0, Math.PI * 2)
+        ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`
+        ctx.fill()
+
+        // Luminous halo untuk bintang terang (jauh lebih efisien dari shadowBlur CPU filter)
+        if (s.r > 1.0) {
+          ctx.beginPath()
+          ctx.arc(px, py, s.r * 2.2, 0, Math.PI * 2)
+          ctx.fillStyle = `rgba(${r},${g},${b},${alpha * 0.22})`
+          ctx.fill()
+        }
+      })
+
+      // Draw shooting stars
+      shootersRef.current = shootersRef.current.filter((s) => {
+        s.x += Math.cos(s.angle) * s.speed
+        s.y += Math.sin(s.angle) * s.speed
+        s.opacity -= 0.012
+
+        if (s.opacity <= 0 || s.x > canvas.width + 50 || s.y > canvas.height + 50) return false
+
+        const tailX = s.x - Math.cos(s.angle) * s.len
+        const tailY = s.y - Math.sin(s.angle) * s.len
+
+        const grad = ctx.createLinearGradient(tailX, tailY, s.x, s.y)
+        grad.addColorStop(0, `rgba(255,255,255,0)`)
+        grad.addColorStop(0.7, `rgba(200,220,255,${s.opacity * 0.4})`)
+        grad.addColorStop(1, `rgba(255,255,255,${s.opacity})`)
+
+        ctx.beginPath()
+        ctx.moveTo(tailX, tailY)
+        ctx.lineTo(s.x, s.y)
+        ctx.strokeStyle = grad
+        ctx.lineWidth = s.width
+        ctx.shadowBlur = 8
+        ctx.shadowColor = `rgba(180,210,255,${s.opacity})`
+        ctx.stroke()
+        ctx.shadowBlur = 0
+
+        return true
+      })
+    }
+
+    // ── Loop (dijeda saat tab tersembunyi; tidak berjalan sama sekali saat reduced motion) ──
+    const loop = () => {
+      draw()
+      animRef.current = requestAnimationFrame(loop)
+    }
+    const startLoop = () => {
+      if (reduce || animRef.current) return
+      animRef.current = requestAnimationFrame(loop)
+    }
+    const stopLoop = () => {
+      cancelAnimationFrame(animRef.current)
+      animRef.current = null
+    }
+    const onVisibility = () => (document.hidden ? stopLoop() : startLoop())
+
+    const onMouseMove = (e) => {
+      mouseRef.current = {
+        x: e.clientX - window.innerWidth / 2,
+        y: e.clientY - window.innerHeight / 2,
+      }
+    }
+
+    resize()
+    window.addEventListener('resize', resize)
+    document.addEventListener('visibilitychange', onVisibility)
+    // Parallax mouse dimatikan saat reduced motion
+    if (mouseParallax && !reduce) window.addEventListener('mousemove', onMouseMove, { passive: true })
+    startLoop()
+
+    return () => {
+      window.removeEventListener('resize', resize)
+      window.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('visibilitychange', onVisibility)
+      stopLoop()
+      if (shooterInterval) clearInterval(shooterInterval)
+      shootersRef.current = []
+    }
+  }, [count, mouseParallax])
+
+  return (
+    <canvas
+      ref={canvasRef}
+      aria-hidden="true"
+      style={{
+        position: 'fixed',
+        top: 0, left: 0,
+        width: '100%', height: '100%',
+        pointerEvents: 'none',
+        zIndex: 0,
+      }}
+    />
+  )
+}
+
+export default memo(StarField)
+===== END FILE =====
+
+===== FILE: src/index.css =====
+/* ============================================================
+   COSMIC JOURNEY — Global Styles (Updated: brighter palette)
+   ============================================================ */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-body: 'Outfit', system-ui, sans-serif;
+  --void: #02021a;
+  --deep: #05051f;
+  --nebula-dark: #080824;
+  --blue-dim: #0e1e42;
+  --blue-mid: #1e3566;
+  --star-white: #f0f4ff;
+  --star-dim: #a0b4dd;
+  --star-muted: #6677aa;
+  --accent-blue: #5577ff;
+  --accent-purple: #9955ff;
+  --accent-pink: #ff55bb;
+  --accent-gold: #ffdd55;
+  --accent-teal: #55ffdd;
+  --glow-blue: rgba(85, 119, 255, 0.35);
+  --glow-purple: rgba(153, 85, 255, 0.30);
+  --glow-pink: rgba(255, 85, 187, 0.30);
+}
+
+html,
+body {
+  font-size: 16px;
+  background: var(--void);
+  color: var(--star-white);
+  font-family: var(--font-body);
+  font-weight: 300;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  /* address bar HP: tinggi mengikuti layar yang benar-benar terlihat */
+  /* MENGUNCI SCROLL GLOBAL & INPUT MOUSE WHEEL/SWIPE */
+  overflow: hidden;
+  cursor: crosshair;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--void);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--blue-mid);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-blue);
+}
+
+::selection {
+  background: var(--glow-blue);
+  color: var(--star-white);
+}
+
+/* WRAPPER SECTION PENGGANTI MAIN SCROLL */
+.section-wrapper {
+  position: relative;
+  z-index: 1;
+  /* Mengatur layer konten di atas StarField (zIndex: 0) */
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: opacity 0.4s ease-in-out;
+}
+
+.section-wrapper.hidden {
+  opacity: 0;
+}
+
+.section-wrapper.visible {
+  opacity: 1;
+}
+
+/* Transisi gelap-terang antar-section (selain intro → solar) */
+.fade-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--void);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.fade-overlay.fade-dark {
+  opacity: 1;
+  pointer-events: auto;
+  /* cegah klik selama transisi */
+  transition: opacity var(--fade-out) ease-in;
+}
+
+.fade-overlay.fade-light {
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity var(--fade-in) ease-out;
+}
+
+.cosmic-section {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  /* sebelumnya hanya 100vh: lebih tinggi dari layar saat address bar HP tampil */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 5rem 2rem;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* Ending punya min-height: 100vh sendiri di modulnya; id menang atas class modul */
+#ending {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Typography */
+.t-label {
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 300;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: var(--star-muted);
+}
+
+.t-heading {
+  font-family: var(--font-display);
+  font-weight: 300;
+  line-height: 1.1;
+  color: var(--star-white);
+}
+
+.t-body {
+  font-family: var(--font-body);
+  font-weight: 300;
+  line-height: 1.9;
+  color: var(--star-dim);
+}
+
+.glow-blue {
+  text-shadow: 0 0 30px var(--glow-blue);
+  color: #99bbff;
+}
+
+.glow-purple {
+  text-shadow: 0 0 30px var(--glow-purple);
+  color: #cc99ff;
+}
+
+.glow-pink {
+  text-shadow: 0 0 30px var(--glow-pink);
+  color: #ff99dd;
+}
+
+button {
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-weight: 300;
+  letter-spacing: 0.1em;
+  border: none;
+  background: none;
+  color: inherit;
+}
+
+/* Cadangan indikator fokus keyboard untuk tombol lama yang belum punya.
+   Tombol dengan :focus-visible sendiri (spesifisitas lebih tinggi) tidak terpengaruh. */
+button:focus-visible {
+  outline: 2px solid #aaccff;
+  outline-offset: 3px;
+}
+
+.noise-overlay {
+  position: absolute;
+  inset: 0;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 1;
+}
+
+@media (max-width: 768px) {
+  .cosmic-section {
+    padding: 4rem 1.25rem;
+  }
+}
+
+body.hide-global-ui nav,
+body.hide-global-ui div[class*="player"],
+body.hide-global-ui button[class*="showBtn"] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.5s ease !important;
+}
+
+/* ── Reduced motion: transisi global dan animasi dekoratif Ending ──
+   (Ending.module.css tidak diubah; class modul dipilih lewat potongan nama,
+   pola yang sama dengan aturan hide-global-ui di atas.) */
+@media (prefers-reduced-motion: reduce) {
+  .section-wrapper {
+    transition-duration: 0.2s;
+  }
+
+  [class*="btnStar"],
+  [class*="heartNova"],
+  [class*="nextBtn"] {
+    animation: none !important;
+  }
+
+  /* Ledakan hati dekoratif dimatikan sepenuhnya; bintang latar tampil statis */
+  [class*="heartNova"] {
+    display: none !important;
+  }
+
+  [class*="modalStar"] {
+    animation: none !important;
+    opacity: 0.7;
+    transform: none;
+  }
+
+  [class*="recordRing"] {
+    transition: none !important;
+  }
+}
+===== END FILE =====
+
+===== FILE: src/sections/DeepSpace.module.css [CUPLIKAN] =====
+/* CUPLIKAN: hanya rule akar + lapisan latar (inset: 0 + background). BUKAN file lengkap. */
+.deepspace {
+  background: rgba(0, 0, 3, 0.60);
+  gap: 3rem;
+  position: relative;
+  overflow: hidden;
+}
+===== END FILE =====
+
+===== FILE: src/sections/Ending.module.css [CUPLIKAN] =====
+/* CUPLIKAN: hanya rule akar + lapisan latar (inset: 0 + background). BUKAN file lengkap. */
+.ending {
+  background: rgba(4, 3, 15, 0.6);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bgGradient {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, transparent 20%, rgba(2, 1, 8, 0.95) 80%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 2, 8, 0.85);
+  backdrop-filter: blur(15px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 0.5s ease, visibility 0.5s ease;
+}
+
+.warpOverlay {
+  position: fixed;
+  inset: 0;
+  background: #000002;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 0.6s ease, visibility 0.6s ease;
+}
+===== END FILE =====
+
+===== FILE: src/sections/Gallery.module.css [CUPLIKAN] =====
+/* CUPLIKAN: hanya rule akar + lapisan latar (inset: 0 + background). BUKAN file lengkap. */
+.gallery {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  padding: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+===== END FILE =====
+
+===== FILE: src/sections/Intro.module.css [CUPLIKAN] =====
+/* CUPLIKAN: hanya rule akar + lapisan latar (inset: 0 + background). BUKAN file lengkap. */
+.intro {
+  background: radial-gradient(ellipse at 50% 60%, rgba(16, 16, 60, 0.85) 0%, rgba(5, 5, 15, 0.7) 75%);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  gap: 0;
+}
+
+.nebulaBg {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 60% 40% at 20% 80%, rgba(80, 120, 255, 0.1) 0%, transparent 70%), radial-gradient(ellipse 50% 35% at 80% 20%, rgba(150, 80, 255, 0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.sunGlow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 75vh 95vh at 0% 50%, rgba(255, 160, 70, 0.32) 0%, rgba(255, 120, 40, 0.1) 45%, transparent 75%);
+  opacity: 0;
+  transition: opacity 2.8s ease-in;
+  pointer-events: none;
+  z-index: 1;
+}
+===== END FILE =====
+
+===== FILE: src/sections/Phenomena.module.css [CUPLIKAN] =====
+/* CUPLIKAN: hanya rule akar + lapisan latar (inset: 0 + background). BUKAN file lengkap. */
+.phenomena {
+  background: radial-gradient(ellipse at 80% 30%, rgba(14, 5, 32, 0.78) 0%, rgba(0, 0, 5, 0.55) 55%);
+  position: relative;
+  overflow: hidden;
+}
+
+.bgGradient {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 50% 40% at 85% 15%, rgba(136, 68, 255, 0.06) 0%, transparent 60%), radial-gradient(ellipse 40% 50% at 10% 85%, rgba(255, 68, 170, 0.04) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.cardHUD::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 0%, var(--glow), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.4s;
+  pointer-events: none;
+  border-radius: inherit;
+  transform: translateZ(0px);
+}
+
+.cinematicOverlay {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(8, 8, 16, 0.95) 0%, rgba(0, 0, 4, 0.98) 100%);
+  backdrop-filter: blur(25px);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+===== END FILE =====
+
+===== FILE: src/sections/SecretEnding.module.css [CUPLIKAN] =====
+/* CUPLIKAN: hanya rule akar + lapisan latar (inset: 0 + background). BUKAN file lengkap. */
+.secret {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+  isolation: isolate;
+  background: radial-gradient(ellipse 70% 45% at 50% 16%, rgba(85, 119, 255, 0.2), transparent 70%), radial-gradient(ellipse 80% 60% at 50% 100%, rgba(153, 85, 255, 0.12), transparent 70%);
+}
+===== END FILE =====
+
+===== FILE: src/sections/SolarSystem.module.css [CUPLIKAN] =====
+/* CUPLIKAN: hanya rule akar + lapisan latar (inset: 0 + background). BUKAN file lengkap. */
+.solar {
+  background: radial-gradient(ellipse at 15% 50%, rgba(8, 20, 42, 0.78) 0%, rgba(0, 0, 8, 0.55) 60%);
+  overflow: hidden;
+  position: relative;
+}
+
+.bgGradient {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 40% 60% at 0% 50%, rgba(255, 180, 60, 0.05) 0%, transparent 70%), radial-gradient(ellipse 30% 40% at 90% 30%, rgba(68, 102, 255, 0.04) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 1;
+}
+===== END FILE =====
+
+===== FILE: src/sections/Wishing.module.css [CUPLIKAN] =====
+/* CUPLIKAN: hanya rule akar + lapisan latar (inset: 0 + background). BUKAN file lengkap. */
+.wishing {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 25%, rgba(8, 10, 30, 0.45) 0%, rgba(0, 0, 6, 0.6) 75%);
+}
+
+.sky {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: radial-gradient(ellipse 80% 35% at 50% 105%, rgba(90, 70, 200, 0.22) 0%, transparent 70%), radial-gradient(ellipse 60% 40% at 15% 20%, rgba(80, 120, 255, 0.07) 0%, transparent 70%);
+}
+
+.resume {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(2, 2, 10, 0.55);
+  animation: resumeIn 0.6s ease both;
+}
+===== END FILE =====

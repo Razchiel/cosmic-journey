@@ -1,0 +1,3478 @@
+COSMIC JOURNEY: SNAPSHOT KODE (subset per fase, hemat token)
+Dibuat: 2026-10-29 16:12
+Posisi: siap untuk mengerjakan FASE 11B (Copy pass: Ending, Wishing, Form, Secret, Gallery, komponen, pesan error)
+Snapshot ini hanya berisi file yang relevan untuk fase ini, kondisi TERBARU.
+File yang TIDAK tercantum di DAFTAR FILE sudah ada di proyek tetapi sengaja tidak disertakan.
+Jangan mengarang isinya; jika butuh salah satunya, minta saya mengunggahnya.
+File bertanda [CUPLIKAN] hanya berisi sebagian aturan CSS, bukan file lengkap.
+
+DAFTAR FILE (disertakan):
+- netlify/functions/get-wishes.js
+- netlify/functions/submit-wish.js
+- src/components/FactPopup.jsx
+- src/components/HomeWarp.jsx
+- src/components/MessageBox.jsx
+- src/components/MusicPlayer.jsx
+- src/components/NavDots.jsx
+- src/components/WishForm.jsx
+- src/data/dummyWishes.js
+- src/sections/Ending.jsx
+- src/sections/Gallery.jsx
+- src/sections/SecretEnding.jsx
+- src/sections/Wishing.jsx
+- src/services/wishes.js
+
+FILE LAIN DI PROYEK (tidak disertakan):
+index.html, netlify.toml, package.json, vite.config.js, netlify/lib/shared.js, supabase/schema.sql, src/App.jsx, src/components/EntryGate.jsx, src/components/EntryGate.module.css, src/components/FactPopup.module.css, src/components/HomeWarp.module.css, src/components/MessageBox.module.css, src/components/MusicPlayer.module.css, src/components/NavDots.module.css, src/components/ProgressBar.jsx, src/components/StarField.jsx, src/components/UniverseScale.jsx, src/components/UniverseScale.module.css, src/components/universeScenes.jsx, src/components/WarpOverlay.jsx, src/components/WarpOverlay.module.css, src/components/WishForm.module.css, src/data/index.js, src/hooks/useAudio.js, src/hooks/useScroll.js, src/hooks/useSfx.js, src/index.css, src/main.jsx, src/sections/DeepSpace.jsx, src/sections/DeepSpace.module.css, src/sections/Ending.module.css, src/sections/Gallery.module.css, src/sections/Intro.jsx, src/sections/Intro.module.css, src/sections/Phenomena.jsx, src/sections/Phenomena.module.css, src/sections/SecretEnding.module.css, src/sections/SolarSystem.jsx, src/sections/SolarSystem.module.css, src/sections/Wishing.module.css
+
+======================================================================
+
+===== FILE: netlify/functions/get-wishes.js =====
+// ============================================================
+// GET /api/get-wishes?sort=newest|rating&category=all|<id>&cursor=<opaque>&limit=12
+// Hanya status 'approved' dan is_private = false. Field status/is_private/ip_hash tidak pernah keluar.
+// Kontrak respons sama dengan getWishes() di src/services/wishes.js:
+//   { items, nextCursor, total, aggregate: { average, count } }
+// ============================================================
+import { CATEGORY_IDS, db, fail, json, totalFromRange } from '../lib/shared.js'
+
+const PAGE_DEFAULT = 12
+const PAGE_MAX = 50
+const OFFSET_MAX = 2000
+const COLUMNS = 'id,display_name,is_anonymous,category,message,rating,created_at'
+
+const ORDER = {
+    newest: 'created_at.desc,id.desc',
+    rating: 'rating.desc,created_at.desc,id.desc',
+}
+
+// Cursor "opaque" = offset dalam base64url. Klien mengirim balik apa adanya.
+const encodeCursor = (n) => Buffer.from(String(n)).toString('base64url')
+function decodeCursor(c) {
+    if (!c) return 0
+    if (c.length > 24) return null
+    const n = Number(Buffer.from(c, 'base64url').toString())
+    return Number.isInteger(n) && n >= 0 && n <= OFFSET_MAX ? n : null
+}
+
+const CACHE_HEADERS = {
+    // Browser: 30 dtk. CDN Netlify: 60 dtk + stale-while-revalidate (hemat kuota Supabase & function).
+    'Cache-Control': 'public, max-age=30',
+    'Netlify-CDN-Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
+}
+
+export default async (req) => {
+    if (req.method !== 'GET') return fail('validation', 'Method not allowed.', 405)
+
+    const params = new URL(req.url).searchParams
+    const sort = params.get('sort') || 'newest'
+    const category = params.get('category') || 'all'
+    const offset = decodeCursor(params.get('cursor'))
+    const limit = Math.min(PAGE_MAX, Math.max(1, parseInt(params.get('limit'), 10) || PAGE_DEFAULT))
+
+    if (!ORDER[sort]) return fail('validation', 'Unknown sort.', 400)
+    if (category !== 'all' && !CATEGORY_IDS.includes(category)) return fail('validation', 'Unknown category.', 400)
+    if (offset === null) return fail('validation', 'Invalid cursor.', 400)
+
+    try {
+        const q = new URLSearchParams({
+            select: COLUMNS,
+            status: 'eq.approved',
+            is_private: 'eq.false',
+            order: ORDER[sort],
+            limit: String(limit),
+            offset: String(offset),
+        })
+        if (category !== 'all') q.set('category', `eq.${category}`)
+
+        const [listRes, statsRes] = await Promise.all([
+            db(`wishes?${q}`, { headers: { Prefer: 'count=exact' } }),
+            db('rpc/wish_stats', { method: 'POST', body: {} }),
+        ])
+
+        // 416 = offset melewati jumlah baris → anggap halaman kosong
+        let rows = []
+        let total = 0
+        if (listRes.status === 416) {
+            total = totalFromRange(listRes)
+        } else if (listRes.ok) {
+            rows = await listRes.json()
+            total = totalFromRange(listRes)
+        } else {
+            throw new Error(`list failed (${listRes.status})`)
+        }
+
+        if (!statsRes.ok) throw new Error(`stats failed (${statsRes.status})`)
+        const stats = (await statsRes.json())?.[0] || {}
+
+        const items = rows.map((r) => ({
+            id: r.id,
+            displayName: r.display_name,
+            isAnonymous: r.is_anonymous,
+            category: r.category,
+            message: r.message,
+            rating: r.rating,
+            createdAt: r.created_at,
+        }))
+
+        const nextCursor = offset + items.length < total && items.length > 0
+            ? encodeCursor(offset + items.length)
+            : null
+
+        return json(
+            {
+                items,
+                nextCursor,
+                total,
+                aggregate: { count: Number(stats.count) || 0, average: Number(stats.average) || 0 },
+            },
+            200,
+            CACHE_HEADERS
+        )
+    } catch (err) {
+        console.error('[get-wishes]', err?.message || err)
+        return fail('server', 'The observatory is quiet right now. Please try again soon.', 500)
+    }
+}
+===== END FILE =====
+
+===== FILE: netlify/functions/submit-wish.js =====
+// ============================================================
+// POST /api/submit-wish
+// Validasi ketat server-side → honeypot → rate limit + cek duplikat → simpan.
+// Default status 'pending'. AUTO_APPROVE=true → 'approved' (hanya pesan publik tanpa email/link/telepon).
+// Pesan private tersimpan tetapi TIDAK PERNAH dikembalikan oleh get-wishes.
+// ============================================================
+import {
+    CATEGORY_IDS,
+    MESSAGE_MIN,
+    MESSAGE_MAX,
+    NAME_MAX,
+    cleanMessage,
+    cleanName,
+    db,
+    fail,
+    hasBadWords,
+    hashIp,
+    json,
+    makeCallsign,
+    needsReview,
+} from '../lib/shared.js'
+
+const LIMIT_PER_HOUR = 10
+const LIMIT_PER_DAY = 30
+const MAX_BODY = 4000
+const HOUR_MS = 3600 * 1000
+const DAY_MS = 24 * HOUR_MS
+
+// Satu query untuk dua keperluan: rate limit (jumlah per jam / per hari) dan cek duplikat (24 jam terakhir)
+async function recentFromIp(ipHash) {
+    const q = new URLSearchParams({
+        select: 'message,created_at',
+        ip_hash: `eq.${ipHash}`,
+        created_at: `gte.${new Date(Date.now() - DAY_MS).toISOString()}`,
+        order: 'created_at.desc',
+        limit: '20',
+    })
+    const res = await db(`wishes?${q}`)
+    if (!res.ok) throw new Error(`recent check failed (${res.status})`)
+    const rows = await res.json()
+    return Array.isArray(rows) ? rows : []
+}
+
+// Normalisasi untuk membandingkan pesan: huruf kecil, tanpa aksen, tanpa tanda baca, spasi dirapikan
+const normalize = (s) =>
+    String(s)
+        .toLowerCase()
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^\p{L}\p{N}]+/gu, ' ')
+        .trim()
+
+const toRecord = (r) => ({
+    id: r.id,
+    displayName: r.display_name,
+    isAnonymous: r.is_anonymous,
+    category: r.category,
+    message: r.message,
+    rating: r.rating,
+    isPrivate: r.is_private,
+    createdAt: r.created_at,
+    status: r.status,
+})
+
+export default async (req, context) => {
+    if (req.method !== 'POST') return fail('validation', 'Method not allowed.', 405)
+
+    // ── Baca body ──
+    let data
+    try {
+        const raw = await req.text()
+        if (raw.length > MAX_BODY) return fail('validation', 'That message is too large.', 413)
+        data = JSON.parse(raw)
+    } catch (_) {
+        return fail('validation', 'We could not read that request.', 400)
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        return fail('validation', 'We could not read that request.', 400)
+    }
+
+    // ── Validasi & pembersihan ──
+    const message = cleanMessage(data.message)
+    if (message.length < MESSAGE_MIN || message.length > MESSAGE_MAX) {
+        return fail('validation', `Your message needs ${MESSAGE_MIN}–${MESSAGE_MAX} characters.`, 400)
+    }
+    const rating = data.rating
+    if (typeof rating !== 'number' || !Number.isInteger(rating) || rating < 1 || rating > 5) {
+        return fail('validation', 'Please choose a rating from 1 to 5 stars.', 400)
+    }
+    const category = data.category
+    if (typeof category !== 'string' || !CATEGORY_IDS.includes(category)) {
+        return fail('validation', 'Please choose a category.', 400)
+    }
+    const isPrivate = data.isPrivate === true
+    if (!isPrivate && data.consent !== true) {
+        return fail('validation', 'Please agree to show your message in the Gallery, or send it privately.', 400)
+    }
+
+    let displayName = cleanName(data.displayName).slice(0, NAME_MAX)
+    const isAnonymous = data.isAnonymous === true || !displayName
+    if (!displayName) displayName = makeCallsign()
+
+    if (hasBadWords(message) || hasBadWords(displayName)) {
+        return fail('validation', 'Please keep your words kind, the stars are listening. Try rephrasing your message.', 400)
+    }
+
+    // ── Honeypot: bot mengisi field tersembunyi → pura-pura sukses, tidak disimpan ──
+    if (typeof data.website === 'string' && data.website.trim() !== '') {
+        return json(
+            {
+                id: `ghost-${Date.now().toString(36)}`,
+                displayName, isAnonymous, category, message, rating, isPrivate,
+                createdAt: new Date().toISOString(),
+                status: 'pending',
+            },
+            201,
+            { 'Cache-Control': 'no-store' }
+        )
+    }
+
+    try {
+        // ── Rate limit + cek duplikat per IP-hash ──
+        const ipHash = hashIp(context?.ip || req.headers.get('x-nf-client-connection-ip'))
+        if (ipHash) {
+            const recent = await recentFromIp(ipHash)
+            const hourAgo = Date.now() - HOUR_MS
+            const lastHour = recent.filter((r) => Date.parse(r.created_at) >= hourAgo).length
+
+            if (lastHour >= LIMIT_PER_HOUR || recent.length >= LIMIT_PER_DAY) {
+                return fail('rate_limit', 'You have sent a few wishes already. Please come back a little later.', 429)
+            }
+
+            // Pesan yang sama persis dari IP yang sama dalam 24 jam → tolak ramah.
+            // Pesan sama dari orang lain (IP berbeda) tetap boleh.
+            const mine = normalize(message)
+            if (recent.some((r) => normalize(r.message) === mine)) {
+                return fail('validation', 'You already sent this wish. Try a new one.', 409)
+            }
+        }
+
+        // ── Status awal ──
+        const autoApprove =
+            process.env.AUTO_APPROVE === 'true' &&
+            !isPrivate &&
+            !needsReview(message) &&
+            !needsReview(displayName)
+
+        // ── Simpan ──
+        const res = await db('wishes', {
+            method: 'POST',
+            headers: { Prefer: 'return=representation' },
+            body: {
+                display_name: displayName,
+                is_anonymous: isAnonymous,
+                category,
+                message,
+                rating,
+                is_private: isPrivate,
+                status: autoApprove ? 'approved' : 'pending',
+                ip_hash: ipHash,
+            },
+        })
+        if (!res.ok) {
+            let code = ''
+            try { code = (await res.json())?.code || '' } catch (_) { /* abaikan */ }
+            throw new Error(`insert failed (${res.status} ${code})`)
+        }
+        const rows = await res.json()
+        return json(toRecord(rows[0]), 201, { 'Cache-Control': 'no-store' })
+    } catch (err) {
+        console.error('[submit-wish]', err?.message || err) // tanpa isi pesan / IP
+        return fail('server', 'The observatory is quiet right now. Please try again soon.', 500)
+    }
+}
+===== END FILE =====
+
+===== FILE: src/components/FactPopup.jsx =====
+import { useEffect } from 'react'
+import styles from './FactPopup.module.css'
+
+export default function FactPopup({ fact, onClose }) {
+  useEffect(() => {
+    if (!fact) return
+    const timer = setTimeout(onClose, 6000)
+    return () => clearTimeout(timer)
+  }, [fact, onClose])
+
+  return (
+    <div className={`${styles.popup} ${fact ? styles.show : ''}`} role="status">
+      {fact && (
+        <>
+          <div className={styles.header}>
+            <span className={styles.title}>{fact.title}</span>
+            {fact.subtitle && <span className={styles.subtitle}>{fact.subtitle}</span>}
+            <button className={styles.close} onClick={onClose} aria-label="Close">×</button>
+          </div>
+          <p className={styles.text}>{fact.text}</p>
+          {fact.extra && <p className={styles.extra}>{fact.extra}</p>}
+        </>
+      )}
+    </div>
+  )
+}
+===== END FILE =====
+
+===== FILE: src/components/HomeWarp.jsx =====
+import { useRef, useState, useEffect, useMemo, memo } from 'react'
+import { Canvas, useFrame } from '@react-three/fiber'
+import * as THREE from 'three'
+import { sfx } from '../hooks/useSfx.js'
+import styles from './HomeWarp.module.css'
+
+// Timeline (ms)
+const T_LAUNCH = 1800    // roket mulai naik, warp mulai
+const T_COUNT = 10000    // hitung mundur "3" (lalu 2, 1 tiap 900 ms)
+const T_FLASH = 12700    // kilatan menuju Bumi
+export const HOME_MS = 13200 // dipakai App sebelum pindah ke Intro
+// Overlay mulai memudar saat Intro tampil di belakangnya.
+// App melepas overlay di HOME_MS + HOME_END_PAD (800 ms): fade 400 ms ini harus selesai sebelum itu.
+const T_LEAVE = HOME_MS + 400
+
+const COUNT = 360
+const COUNT_REDUCED = 160
+const clamp01 = (v) => Math.min(1, Math.max(0, v))
+
+// Hanya starfield (garis bintang saat warp)
+function Scene({ t0, reduce }) {
+    const count = reduce ? COUNT_REDUCED : COUNT
+    const stars = useRef()
+    const mat = useRef()
+    const dummy = useMemo(() => new THREE.Object3D(), [])
+    const ps = useMemo(() => Array.from({ length: count }, () => ({
+        x: (Math.random() - 0.5) * 40,
+        y: (Math.random() - 0.5) * 60,
+        z: Math.random() * 13 - 14,
+    })), [count])
+
+    useFrame((state, delta) => {
+        if (!t0.current || !stars.current) return
+        const t = performance.now() - t0.current
+        const k = clamp01((t - T_LAUNCH) / 6000)
+        const s = k * k * (3 - 2 * k)
+
+        // Bintang makin terang mengikuti hitung mundur, puncaknya saat kilatan (0,8 → 1)
+        if (mat.current) {
+            const b = clamp01((t - T_COUNT) / (T_FLASH - T_COUNT))
+            mat.current.opacity = 0.8 + 0.2 * b * b
+        }
+
+        // Reduced motion: tanpa getaran kamera, garis bintang pendek dan lambat
+        if (!reduce) {
+            const amp = s * s * 0.14
+            state.camera.position.x = (Math.random() - 0.5) * amp
+            state.camera.position.y = (Math.random() - 0.5) * amp
+        }
+
+        const speed = 0.2 + s * (reduce ? 12 : 60)
+        const stretch = 1 + s * (reduce ? 8 : 110)
+        ps.forEach((p, i) => {
+            p.y -= speed * delta
+            if (p.y < -30) { p.y = 30; p.x = (Math.random() - 0.5) * 40 }
+            dummy.position.set(p.x, p.y, p.z)
+            dummy.scale.set(1, stretch, 1)
+            dummy.updateMatrix()
+            stars.current.setMatrixAt(i, dummy.matrix)
+        })
+        stars.current.instanceMatrix.needsUpdate = true
+    })
+
+    return (
+        <instancedMesh ref={stars} args={[null, null, count]} frustumCulled={false}>
+            <boxGeometry args={[0.025, 0.025, 0.025]} />
+            <meshBasicMaterial ref={mat} color="#e0f0ff" transparent opacity={0.8} />
+        </instancedMesh>
+    )
+}
+
+// Roket 2D: mengapung & bergoyang → api menyala → berdiri tegak & naik perlahan
+function Rocket2D({ t0, reduce }) {
+    const body = useRef()
+    const flame = useRef()
+
+    useEffect(() => {
+        let raf = 0
+        const j = reduce ? 0 : 1   // 0 = tanpa goyang, getar, dan kedip api
+        const loop = () => {
+            const t = performance.now() - t0.current
+            const lk = clamp01((t - T_LAUNCH) / (T_FLASH - T_LAUNCH - 800))
+            const rise = lk * lk * (3 - 2 * lk)                       // naik 0..1
+            const up = clamp01((t - T_LAUNCH) / 1400)
+            const upright = up * up * (3 - 2 * up)                    // tegak 0..1
+            const ig = clamp01((t - T_LAUNCH) / 900)                  // api menyala 0..1
+            const sway = Math.sin(t * 0.0016) * 10 * (1 - upright) * j
+            const bob = Math.sin(t * 0.0021) * 10 * (1 - upright) * j
+            const shake = ig * (Math.random() - 0.5) * 1.6 * j
+            const y = bob - rise * window.innerHeight * 0.3
+            if (body.current) {
+                body.current.style.transform =
+                    `translate(${shake}px, ${y}px) rotate(${sway + (1 - upright) * 6 * j}deg)`
+            }
+            if (flame.current) {
+                const len = ig * (0.75 + rise * 0.6) + (Math.random() - 0.5) * 0.16 * ig * j
+                flame.current.style.transform = `scale(${1 + (Math.random() - 0.5) * 0.1 * ig * j}, ${Math.max(len, 0.001)})`
+            }
+            raf = requestAnimationFrame(loop)
+        }
+        raf = requestAnimationFrame(loop)
+        return () => cancelAnimationFrame(raf)
+    }, [t0, reduce])
+
+    return (
+        <div className={styles.rocketWrap} aria-hidden="true">
+            <div ref={body} className={styles.rocket}>
+                <svg viewBox="0 0 80 150" className={styles.rocketSvg}>
+                    <g ref={flame} className={styles.flame} style={{ transformOrigin: '40px 108px' }}>
+                        <path d="M32 108 C32 128 38 142 40 152 C42 142 48 128 48 108Z" fill="#ff8a30" opacity="0.9" />
+                        <path d="M36 108 C36 120 39 130 40 138 C41 130 44 120 44 108Z" fill="#fff2b0" />
+                    </g>
+                    <path d="M20 74 L4 104 L20 96Z" fill="#ff5a5a" />
+                    <path d="M60 74 L76 104 L60 96Z" fill="#ff5a5a" />
+                    <path d="M30 98 L50 98 L47 109 L33 109Z" fill="#444b5e" />
+                    <path d="M40 4 C58 22 62 50 60 98 L20 98 C18 50 22 22 40 4Z" fill="#e8ecf8" />
+                    <path d="M40 4 C50 13 56 25 58 38 L22 38 C24 25 30 13 40 4Z" fill="#ff5a5a" />
+                    <circle cx="40" cy="58" r="9" fill="#6ec5ff" stroke="#aab4cc" strokeWidth="3" />
+                    <circle cx="37" cy="55" r="2.5" fill="#fff" opacity="0.7" />
+                </svg>
+            </div>
+        </div>
+    )
+}
+
+// Konstelasi nama pengguna terbentuk di langit saat roket naik
+function NameConstellation({ name, points }) {
+    if (!points?.length) return null
+    const xs = points.map((p) => p.x)
+    const ys = points.map((p) => p.y)
+    const pad = 14
+    const minX = Math.min(...xs) - pad
+    const minY = Math.min(...ys) - pad
+    const w = Math.max(...xs) - Math.min(...xs) + pad * 2
+    const h = Math.max(...ys) - Math.min(...ys) + pad * 2
+    const d = points.map((p, i) => `${i ? 'L' : 'M'}${p.x} ${p.y}`).join(' ')
+    return (
+        <div className={styles.sky}>
+            <svg viewBox={`${minX} ${minY} ${w} ${h}`} className={styles.skySvg} aria-hidden="true">
+                <path d={d} pathLength="1" className={styles.skyLine} />
+                {points.map((p, i) => (
+                    <g key={i} className={styles.skyStar} style={{ animationDelay: `${0.6 + i * 0.5}s` }}>
+                        <circle cx={p.x} cy={p.y} r="6" className={styles.skyHalo} />
+                        <circle cx={p.x} cy={p.y} r="2" fill="#fff" />
+                    </g>
+                ))}
+            </svg>
+            <p className={styles.skyLabel}>✦ {name}’s star</p>
+            <p className={styles.skyNote}>It will keep watch over your home, always.</p>
+        </div>
+    )
+}
+
+// onBrighten: dipanggil sekali saat hitung mundur dimulai (Bumi mendekat).
+// App menaikkan StarField ke depth 0; easing ~2 dtk membuatnya terang penuh saat kilatan.
+function HomeWarp({ active, name = '', points = [], onBrighten }) {
+    const [phase, setPhase] = useState('float') // float | launch | count | flash
+    const [count, setCount] = useState(0)
+    const [leaving, setLeaving] = useState(false)
+    const t0 = useRef(performance.now())
+    const overlayRef = useRef(null)
+    const brightenRef = useRef(onBrighten)
+    brightenRef.current = onBrighten
+
+    const reduce = useMemo(
+        () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+        []
+    )
+
+    useEffect(() => {
+        if (!active) return
+        t0.current = performance.now()
+        setPhase('float')
+        setCount(0)
+        setLeaving(false)
+        const ids = [
+            setTimeout(() => { setPhase('launch'); sfx.warp((T_FLASH - T_LAUNCH) / 1000 + 0.4) }, T_LAUNCH),
+            ...[3, 2, 1].map((n, i) =>
+                setTimeout(() => {
+                    setPhase('count'); setCount(n); sfx.click()
+                    if (i === 0) brightenRef.current?.()
+                }, T_COUNT + i * 900)
+            ),
+            setTimeout(() => { setPhase('flash'); sfx.chime(4) }, T_FLASH),
+            setTimeout(() => setLeaving(true), T_LEAVE),
+        ]
+        return () => ids.forEach(clearTimeout)
+    }, [active])
+
+    // Fokus pindah ke overlay: tombol "Return home" di belakangnya tidak lagi menerima Enter/Spasi
+    useEffect(() => {
+        if (active) overlayRef.current?.focus({ preventScroll: true })
+    }, [active])
+
+    if (!active) return null
+
+    const nearEarth = phase === 'count' || phase === 'flash'
+
+    return (
+        <div
+            ref={overlayRef}
+            className={`${styles.overlay} ${leaving ? styles.overlayOut : ''}`}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Returning home"
+            tabIndex={-1}
+            onKeyDown={(e) => { if (e.key === 'Tab') e.preventDefault() }}
+        >
+            <div className={styles.canvasWrap} aria-hidden="true">
+                <Canvas dpr={[1, 1.5]} camera={{ position: [0, 0, 10], fov: 60 }}>
+                    <Scene t0={t0} reduce={reduce} />
+                </Canvas>
+            </div>
+
+            {phase !== 'float' && <NameConstellation name={name} points={points} />}
+            <Rocket2D t0={t0} reduce={reduce} />
+
+            <div className={`${styles.earthHorizon} ${nearEarth ? styles.earthHorizonOn : ''}`} aria-hidden="true" />
+
+            <div className={styles.caption} role="status" aria-live="polite">
+                {phase === 'float' && <p key="f" className={styles.line}>Adrift between the stars…</p>}
+                {phase === 'launch' && <p key="l" className={styles.line}>Engines awake. Taking you home{name ? `, ${name}` : ''}.</p>}
+                {phase === 'count' && (
+                    <>
+                        <p className={styles.small}>Arriving at Earth in</p>
+                        <div key={count} className={styles.count}>{count}</div>
+                    </>
+                )}
+            </div>
+
+            <div className={`${styles.flash} ${phase === 'flash' ? styles.flashOn : ''}`} aria-hidden="true" />
+        </div>
+    )
+}
+
+export default memo(HomeWarp)
+===== END FILE =====
+
+===== FILE: src/components/MessageBox.jsx =====
+import { useEffect, useState } from 'react'
+import styles from './MessageBox.module.css'
+
+export default function MessageBox({ message, onClose }) {
+  const [displayed, setDisplayed] = useState('')
+  const [done, setDone] = useState(false)
+
+  useEffect(() => {
+    if (!message) { setDisplayed(''); setDone(false); return }
+    setDisplayed('')
+    setDone(false)
+
+    let i = 0
+    const interval = setInterval(() => {
+      if (i < message.length) {
+        setDisplayed(message.slice(0, i + 1))
+        i++
+      } else {
+        setDone(true)
+        clearInterval(interval)
+      }
+    }, 24)
+
+    return () => clearInterval(interval)
+  }, [message])
+
+  const handleBackdrop = (e) => {
+    if (e.target === e.currentTarget) onClose()
+  }
+
+  if (!message) return null
+
+  return (
+    <div className={styles.overlay} onClick={handleBackdrop} role="dialog" aria-modal="true" aria-label="Message from the universe">
+      <div className={styles.card}>
+        <div className={styles.deco}>✦</div>
+        <p className={styles.label}>A message from the universe</p>
+        <p className={styles.text}>
+          {displayed}
+          {!done && <span className={styles.cursor} />}
+        </p>
+        {done && (
+          <button className={styles.closeBtn} onClick={onClose}>
+            Return to the cosmos
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+===== END FILE =====
+
+===== FILE: src/components/MusicPlayer.jsx =====
+import { useState, useEffect, useRef } from 'react'
+import styles from './MusicPlayer.module.css'
+
+const TRACK_INFO = {
+  intro: { title: 'Departure', artist: 'Leaving Earth', color: ['#4466ff', '#8844ff'], theme: 'nebula' },
+  solar: { title: 'Solar Winds', artist: 'The Solar System', color: ['#ffaa33', '#ff6644'], theme: 'solar' },
+  phenomena: { title: 'Event Horizon', artist: 'Cosmic Phenomena', color: ['#ff44aa', '#aa22ff'], theme: 'blackhole' },
+  deepspace: { title: 'Into the Void', artist: 'Deep Space', color: ['#4488cc', '#224488'], theme: 'stars' },
+  ending: { title: 'Stardust', artist: 'Reflection Zone', color: ['#88aaff', '#cc88ff'], theme: 'clouds' },
+  wishing: { title: 'Stardust', artist: 'Make a Wish', color: ['#88aaff', '#cc88ff'], theme: 'stars' },
+  gallery: { title: 'Departure', artist: 'Astronaut Gallery', color: ['#4466ff', '#8844ff'], theme: 'nebula' },
+  default: { title: 'Departure', artist: 'Leaving Earth', color: ['#4466ff', '#8844ff'], theme: 'nebula' },
+}
+
+const prefersReduced = () =>
+  typeof window !== 'undefined' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+function getAudioMetrics(data) {
+  if (!data || data.length === 0) return { bass: 0, avg: 0, mid: 0 }
+  const bassEnd = Math.floor(data.length * 0.06)
+  const midEnd = Math.floor(data.length * 0.35)
+  let bass = 0, mid = 0, total = 0
+  for (let i = 0; i < data.length; i++) {
+    const v = data[i] / 255
+    total += v
+    if (i < bassEnd) bass += v
+    else if (i < midEnd) mid += v
+  }
+  return { bass: bass / bassEnd, mid: mid / (midEnd - bassEnd), avg: total / data.length }
+}
+
+function fmt(sec) {
+  if (!sec || isNaN(sec)) return '0:00'
+  const m = Math.floor(sec / 60)
+  const s = Math.floor(sec % 60).toString().padStart(2, '0')
+  return `${m}:${s}`
+}
+
+// ── Animated artwork canvas per theme (IDLE ANIMATION) ──────────────
+function ArtCanvas({ theme, color }) {
+  const canvasRef = useRef(null)
+  const rafRef = useRef(null)
+  const t0 = useRef(Date.now())
+  const particles = useRef([])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    const W = canvas.width, H = canvas.height
+
+    const initParticles = () => {
+      particles.current = []
+      if (theme === 'stars' || theme === 'nebula' || theme === 'clouds') {
+        for (let i = 0; i < 40; i++) {
+          particles.current.push({
+            x: Math.random() * W, y: Math.random() * H,
+            r: Math.random() * 1.5 + 0.3,
+            speed: Math.random() * 0.3 + 0.05,
+            phase: Math.random() * Math.PI * 2,
+            opacity: Math.random() * 0.8 + 0.2,
+          })
+        }
+      }
+    }
+    initParticles()
+
+    const draw = () => {
+      const t = (Date.now() - t0.current) / 1000
+      const c1 = color[0], c2 = color[1]
+
+      ctx.clearRect(0, 0, W, H)
+
+      if (theme === 'nebula') {
+        for (let i = 0; i < 3; i++) {
+          const cx = W * (0.3 + i * 0.2) + Math.sin(t * 0.3 + i) * 8
+          const cy = H * (0.4 + Math.sin(t * 0.2 + i * 1.2) * 0.2)
+          const r = 22 + Math.sin(t + i) * 4
+          const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r)
+          g.addColorStop(0, c1 + (i === 1 ? 'cc' : '88'))
+          g.addColorStop(0.5, c2 + '44')
+          g.addColorStop(1, 'transparent')
+          ctx.fillStyle = g
+          ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill()
+        }
+        particles.current.forEach(p => {
+          p.phase += 0.02
+          const a = 0.4 + Math.abs(Math.sin(p.phase)) * 0.6
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2)
+          ctx.fillStyle = `rgba(200,220,255,${a})`; ctx.fill()
+        })
+      }
+
+      if (theme === 'solar') {
+        const cx = W * 0.5, cy = H * 0.5
+        const pulseR = 14
+        for (let ring = 3; ring >= 0; ring--) {
+          const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, pulseR + ring * 8)
+          g.addColorStop(0, ring === 0 ? '#ffffff' : c1 + 'ee')
+          g.addColorStop(0.4, c1 + (ring === 0 ? 'cc' : '66'))
+          g.addColorStop(1, 'transparent')
+          ctx.fillStyle = g
+          ctx.beginPath(); ctx.arc(cx, cy, pulseR + ring * 8, 0, Math.PI * 2); ctx.fill()
+        }
+        for (let i = 0; i < 6; i++) {
+          const angle = t * 0.4 + i * Math.PI / 3
+          const len = 10 + Math.sin(t + i) * 4
+          const x2 = cx + Math.cos(angle) * (pulseR + len)
+          const y2 = cy + Math.sin(angle) * (pulseR + len)
+          ctx.strokeStyle = c1 + '88'
+          ctx.lineWidth = 1.5
+          ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x2, y2); ctx.stroke()
+        }
+      }
+
+      if (theme === 'blackhole') {
+        const cx = W * 0.5, cy = H * 0.5
+        const coreR = 10
+        for (let i = 5; i >= 0; i--) {
+          const rx = coreR + 6 + i * 4
+          const ry = (coreR + 6 + i * 4) * 0.28
+          const alpha = (0.6 - i * 0.08) * 0.7
+          ctx.save()
+          ctx.translate(cx, cy)
+          ctx.rotate(t * 0.5)
+          ctx.strokeStyle = i < 2 ? c1 + 'ff' : c2 + Math.floor(alpha * 255).toString(16).padStart(2, '0')
+          ctx.lineWidth = i < 2 ? 2 : 1
+          ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2)
+          ctx.stroke(); ctx.restore()
+        }
+        const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR)
+        cg.addColorStop(0, '#000000'); cg.addColorStop(0.6, '#110008'); cg.addColorStop(1, c1 + '44')
+        ctx.fillStyle = cg
+        ctx.beginPath(); ctx.arc(cx, cy, coreR, 0, Math.PI * 2); ctx.fill()
+      }
+
+      if (theme === 'stars') {
+        particles.current.forEach(p => {
+          p.x -= p.speed * 0.8
+          if (p.x < 0) { p.x = W; p.y = Math.random() * H }
+          p.phase += 0.015
+          const a = 0.3 + Math.abs(Math.sin(p.phase)) * 0.7
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2)
+          ctx.fillStyle = `rgba(180,210,255,${a})`; ctx.fill()
+        })
+        const g = ctx.createRadialGradient(W * 0.3, H * 0.5, 0, W * 0.3, H * 0.5, W * 0.6)
+        g.addColorStop(0, c1 + '22'); g.addColorStop(1, 'transparent')
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H)
+      }
+
+      if (theme === 'clouds') {
+        const cloudDefs = [
+          { x: 0.2, y: 0.35, r: 18, speed: 0.20 },
+          { x: 0.55, y: 0.55, r: 22, speed: 0.15 },
+          { x: 0.8, y: 0.3, r: 14, speed: 0.25 },
+        ]
+        cloudDefs.forEach((cl, i) => {
+          const cx = (cl.x + Math.sin(t * cl.speed + i) * 0.15) * W
+          const cy = (cl.y + Math.cos(t * cl.speed * 0.15 + i) * 0.16) * H
+          const r = cl.r
+          for (let b = 3; b >= 0; b--) {
+            const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r + b * 5)
+            g.addColorStop(0, `rgba(200,210,255,${0.18 - b * 0.04})`)
+            g.addColorStop(1, 'transparent')
+            ctx.fillStyle = g
+            ctx.beginPath(); ctx.arc(cx, cy, r + b * 5, 0, Math.PI * 2); ctx.fill()
+          }
+        })
+        particles.current.forEach(p => {
+          p.phase += 0.008
+          const a = 0.2 + Math.abs(Math.sin(p.phase)) * 0.5
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 0.8, 0, Math.PI * 2)
+          ctx.fillStyle = `rgba(220,225,255,${a})`; ctx.fill()
+        })
+      }
+
+      rafRef.current = requestAnimationFrame(draw)
+    }
+
+    rafRef.current = requestAnimationFrame(draw)
+    return () => cancelAnimationFrame(rafRef.current)
+  }, [theme, color])
+
+  return <canvas ref={canvasRef} width={56} height={56} className={styles.artCanvas} />
+}
+
+// ── Bar visualizer ─────────────────────────────────────────
+function BarVisualizer({ getAudioData, playing, color, onMetrics }) {
+  const canvasRef = useRef(null)
+  const rafRef = useRef(null)
+  const t0 = useRef(Date.now())
+  const freqRef = useRef(new Uint8Array(128))
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    const W = canvas.width, H = canvas.height
+    const BINS = 28
+    const freqData = freqRef.current
+
+    const draw = () => {
+      ctx.clearRect(0, 0, W, H)
+      const t = (Date.now() - t0.current) / 1000
+
+      if (!getAudioData || !playing) {
+        // Idle sine wave
+        ctx.strokeStyle = color[0] + '55'
+        ctx.lineWidth = 1.5
+        ctx.beginPath()
+        for (let x = 0; x < W; x++) {
+          const y = H / 2 + Math.sin(x * 0.18 + t * 1.2) * 3.5
+            + Math.sin(x * 0.08 + t * 0.7) * 2
+          x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+        }
+        ctx.stroke()
+        if (onMetrics) onMetrics(null)
+        rafRef.current = requestAnimationFrame(draw)
+        return
+      }
+
+      getAudioData(freqData)
+      if (onMetrics) onMetrics(freqData)
+
+      const step = Math.floor(freqData.length / BINS)
+      const barW = (W / BINS) - 1
+
+      const grad = ctx.createLinearGradient(0, H, 0, 0)
+      grad.addColorStop(0, color[0] + 'dd')
+      grad.addColorStop(0.6, color[1] + 'aa')
+      grad.addColorStop(1, '#ffffff44')
+
+      for (let i = 0; i < BINS; i++) {
+        let sum = 0
+        for (let j = 0; j < step; j++) sum += (freqData[i * step + j] || 0)
+        const v = (sum / step) / 255
+        const barH = Math.max(2, v * H * 1.15)
+        const x = i * (barW + 1)
+        ctx.fillStyle = grad
+        ctx.beginPath()
+        if (ctx.roundRect) ctx.roundRect(x, H - barH, barW, barH, 2)
+        else ctx.rect(x, H - barH, barW, barH)
+        ctx.fill()
+      }
+      rafRef.current = requestAnimationFrame(draw)
+    }
+
+    rafRef.current = requestAnimationFrame(draw)
+    return () => cancelAnimationFrame(rafRef.current)
+  }, [getAudioData, playing, color, onMetrics])
+
+  return <canvas ref={canvasRef} width={196} height={32} className={styles.barCanvas} />
+}
+
+// ── Main component ─────────────────────────────────────────
+export default function MusicPlayer({
+  playing, onToggle, volume, onVolumeChange,
+  activeSection, getAudioData, audioProgress
+}) {
+  const [visible, setVisible] = useState(true)
+  const [track, setTrack] = useState(TRACK_INFO.intro)
+  const [transitioning, setTransitioning] = useState(false)
+  const [beatFlash, setBeatFlash] = useState(false)
+  const playerRef = useRef(null)
+  const beatCooldown = useRef(false)
+  const prevBass = useRef(0)
+  const beatTimers = useRef([])
+  const reduce = useRef(prefersReduced()).current
+
+  // Track change animation.
+  // Dibandingkan lewat OBJEK track (bukan title): "intro" dan "gallery" sama-sama "Departure"
+  // tetapi artisnya berbeda, jadi label harus tetap berganti.
+  useEffect(() => {
+    const next = TRACK_INFO[activeSection] ?? TRACK_INFO.default
+    if (next === track) {
+      setTransitioning(false) // kembali ke track semula di tengah animasi: jangan tertinggal pudar
+      return
+    }
+    setTransitioning(true)
+    const t = setTimeout(() => { setTrack(next); setTransitioning(false) }, 280)
+    return () => clearTimeout(t)
+  }, [activeSection, track])
+
+  useEffect(() => () => beatTimers.current.forEach(clearTimeout), [])
+
+  // Beat detection + direct DOM glow update (tanpa trigger React re-render per frame)
+  const handleMetrics = useRef()
+  handleMetrics.current = (data) => {
+    if (!data || !playing) {
+      if (playerRef.current) playerRef.current.style.setProperty('--glow-int', '0')
+      return
+    }
+    const { bass, avg } = getAudioMetrics(data)
+    if (playerRef.current) {
+      playerRef.current.style.setProperty('--glow-int', (avg * 1.4).toFixed(3))
+    }
+    // Kedip beat (skala + glow tajam) dilewati saat reduced motion; glow lembut di atas tetap berjalan
+    if (!reduce && bass > 0.52 && bass > prevBass.current * 1.22 && !beatCooldown.current) {
+      setBeatFlash(true)
+      beatCooldown.current = true
+      beatTimers.current.push(setTimeout(() => setBeatFlash(false), 100))
+      beatTimers.current.push(setTimeout(() => { beatCooldown.current = false }, 260))
+    }
+    prevBass.current = bass
+  }
+
+  const onMetricsCallback = useRef((data) => handleMetrics.current(data)).current
+
+  const prog = audioProgress?.progress ?? 0
+  const curTime = audioProgress?.currentTime ?? 0
+  const dur = audioProgress?.duration ?? 0
+
+  if (!visible) return (
+    <button
+      className={styles.showBtn}
+      onClick={() => setVisible(true)}
+      title="Show player"
+      aria-label="Show music player"
+    >
+      ♫
+    </button>
+  )
+
+  return (
+    <div
+      ref={playerRef}
+      className={`${styles.player} ${playing ? styles.playing : ''} ${beatFlash ? styles.beat : ''}`}
+      style={{ '--glow': track.color[0], '--glow-int': '0' }}
+    >
+      {/* Close button */}
+      <button
+        className={styles.closeBtn}
+        onClick={() => setVisible(false)}
+        title="Hide player"
+        aria-label="Hide music player"
+      >×</button>
+
+      {/* Top row: art + track info */}
+      <div className={styles.topRow}>
+        {/* Animated artwork */}
+        <div className={styles.artWrap} onClick={onToggle}>
+          <ArtCanvas
+            theme={track.theme}
+            color={track.color}
+          />
+          {/* Play overlay on hover */}
+          <div className={styles.artOverlay}>
+            {playing
+              ? <svg viewBox="0 0 24 24" width="18" height="18" fill="white"><rect x="5" y="3" width="4" height="18" rx="1.5" /><rect x="15" y="3" width="4" height="18" rx="1.5" /></svg>
+              : <svg viewBox="0 0 24 24" width="18" height="18" fill="white"><polygon points="6,3 21,12 6,21" /></svg>
+            }
+          </div>
+          {/* Beat ring */}
+          {beatFlash && <div className={styles.beatRing} style={{ borderColor: track.color[0] }} />}
+        </div>
+
+        {/* Track meta */}
+        <div className={styles.trackMeta}>
+          <div className={styles.trackNameWrap}>
+            <span className={`${styles.trackName} ${transitioning ? styles.fadeOut : styles.fadeIn}`}>
+              {track.title}
+            </span>
+          </div>
+          <span className={styles.trackArtist}>{track.artist}</span>
+          <span className={styles.lofiBadge} style={{ color: track.color[0], borderColor: track.color[0] + '55' }}>
+            ✦ lofi space
+          </span>
+        </div>
+      </div>
+
+      {/* Bar visualizer */}
+      <div className={styles.vizWrap} aria-hidden="true">
+        <BarVisualizer getAudioData={getAudioData} playing={playing} color={track.color} onMetrics={onMetricsCallback} />
+      </div>
+
+      {/* Progress bar — real duration */}
+      <div className={styles.progressArea}>
+        <span className={styles.timeLabel}>{fmt(curTime)}</span>
+        <div className={styles.progressTrack}>
+          <div
+            className={styles.progressFill}
+            style={{ width: `${prog * 100}%`, background: `linear-gradient(90deg, ${track.color[0]}, ${track.color[1]})` }}
+          />
+        </div>
+        <span className={styles.timeLabel}>{fmt(dur)}</span>
+      </div>
+
+      {/* Controls row */}
+      <div className={styles.controlsRow}>
+        <button className={styles.playBtn} onClick={onToggle}
+          style={{ '--btn-col': track.color[0] }}
+          aria-label={playing ? 'Pause' : 'Play'}
+        >
+          {playing
+            ? <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><rect x="5" y="3" width="4" height="18" rx="1.5" /><rect x="15" y="3" width="4" height="18" rx="1.5" /></svg>
+            : <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><polygon points="5,3 20,12 5,21" /></svg>
+          }
+        </button>
+
+        <div className={styles.volRow}>
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor" opacity="0.4" aria-hidden="true">
+            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" />
+          </svg>
+          <input
+            type="range" min="0" max="1" step="0.02"
+            value={volume}
+            onChange={e => onVolumeChange(parseFloat(e.target.value))}
+            className={styles.volSlider}
+            style={{ '--vol': `${volume * 100}%`, '--c1': track.color[0] }}
+            aria-label="Volume"
+          />
+          <span className={styles.volNum}>{Math.round(volume * 100)}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+===== END FILE =====
+
+===== FILE: src/components/NavDots.jsx =====
+import { memo } from 'react'
+import styles from './NavDots.module.css'
+
+const SECTIONS = [
+  { id: 'intro', label: 'Departure' },
+  { id: 'solar', label: 'Solar System' },
+  { id: 'phenomena', label: 'Phenomena' },
+  { id: 'deepspace', label: 'Deep Space' },
+  { id: 'ending', label: 'Reflection' },
+  { id: 'wishing', label: 'Wishing Star' },
+  { id: 'gallery', label: 'Astronaut Gallery' },
+]
+
+function NavDots({ active, onNavigate }) {
+  return (
+    <nav className={styles.nav} aria-label="Section navigation">
+      {SECTIONS.map(({ id, label }) => (
+        <button
+          key={id}
+          type="button"
+          className={`${styles.dot} ${active === id ? styles.active : ''}`}
+          onClick={() => onNavigate(id)}
+          aria-label={`Go to ${label}`}
+          aria-current={active === id ? 'step' : undefined}
+        >
+          <span className={styles.tooltip} aria-hidden="true">{label}</span>
+        </button>
+      ))}
+    </nav>
+  )
+}
+
+export default memo(NavDots)
+===== END FILE =====
+
+===== FILE: src/components/WishForm.jsx =====
+import { useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { sfx } from '../hooks/useSfx.js'
+import {
+    CATEGORIES,
+    MESSAGE_MAX,
+    MESSAGE_MIN,
+    NAME_MAX,
+    getSessionCallsign,
+    submitWish,
+} from '../services/wishes.js'
+import styles from './WishForm.module.css'
+
+const RISE_MS = 2800
+const RISE_MS_REDUCED = 1500
+
+const RATING_WORDS = ['', 'A faint glimmer', 'Some starlight', 'A good voyage', 'A bright journey', 'Pure supernova']
+
+const DEFAULT_DRAFT = {
+    name: '',
+    anonymous: false,
+    category: 'wish',
+    message: '',
+    rating: 0,
+    isPrivate: false,
+    consent: false,
+}
+
+/**
+ * Props:
+ *  - initialDraft: isi form yang tersimpan saat form ditutup (opsional)
+ *  - onClose(draft): form ditutup tanpa kirim
+ *  - onSaved(record): kiriman sukses (App menyimpannya sebagai mySubmission)
+ *  - onDone(): animasi bintang naik selesai → lanjut ke Secret Ending
+ */
+export default function WishForm({ initialDraft, onClose, onSaved, onDone }) {
+    const uid = useId()
+    const [draft, setDraft] = useState({ ...DEFAULT_DRAFT, ...initialDraft })
+    const [hoverRating, setHoverRating] = useState(0)
+    const [attempted, setAttempted] = useState(false)
+    const [status, setStatus] = useState('idle') // idle | sending | rise
+    const [serverError, setServerError] = useState('')
+    const [honeypot, setHoneypot] = useState('')
+    const [viewport, setViewport] = useState(null) // { h, top } dari visualViewport (keyboard virtual)
+
+    const dialogRef = useRef(null)
+    const closeRef = useRef(null)
+    const submitRef = useRef(null)
+    const messageRef = useRef(null)
+    const ratingRef = useRef(null)
+    const consentRef = useRef(null)
+    const timerRef = useRef(0)
+    const mountedRef = useRef(false)
+    const draftRef = useRef(draft)
+    draftRef.current = draft
+    const statusRef = useRef(status)
+    statusRef.current = status
+    const cbRef = useRef({ onClose, onSaved, onDone })
+    cbRef.current = { onClose, onSaved, onDone }
+
+    const reduce = useRef(
+        typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ).current
+
+    const callsign = getSessionCallsign()
+    const set = (patch) => setDraft((d) => ({ ...d, ...patch }))
+
+    // ── Validasi ──
+    const msgLen = draft.message.trim().length
+    const errors = {}
+    if (msgLen === 0) errors.message = 'Your wish needs a few words, even a tiny one.'
+    else if (msgLen < MESSAGE_MIN) errors.message = `A little more, please: at least ${MESSAGE_MIN} characters.`
+    if (!draft.rating) errors.rating = 'Please rate your journey. Tap a star.'
+    if (!draft.isPrivate && !draft.consent) {
+        errors.consent = 'Please tick this box to let your message shine in the Gallery, or choose to send it privately.'
+    }
+    const show = attempted ? errors : {}
+
+    // ── Tutup ──
+    const handleClose = () => {
+        if (statusRef.current !== 'idle') return
+        sfx.close()
+        cbRef.current.onClose?.(draftRef.current)
+    }
+    const closeRefFn = useRef(handleClose)
+    closeRefFn.current = handleClose
+
+    // ── Mount: fokus ke dialog, Esc, visualViewport, cleanup ──
+    useEffect(() => {
+        mountedRef.current = true
+        dialogRef.current?.focus({ preventScroll: true })
+
+        const onKey = (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault()
+                closeRefFn.current()
+            }
+        }
+        document.addEventListener('keydown', onKey)
+
+        // Keyboard virtual: ikuti visual viewport agar tombol kirim tidak tertutup
+        const vv = window.visualViewport
+        const sync = () => setViewport({ h: vv.height, top: vv.offsetTop })
+        if (vv) {
+            sync()
+            vv.addEventListener('resize', sync)
+            vv.addEventListener('scroll', sync)
+        }
+
+        return () => {
+            mountedRef.current = false
+            clearTimeout(timerRef.current)
+            document.removeEventListener('keydown', onKey)
+            if (vv) {
+                vv.removeEventListener('resize', sync)
+                vv.removeEventListener('scroll', sync)
+            }
+        }
+    }, [])
+
+    // Fokus terjebak di dalam dialog (portal ada di akhir body)
+    const onKeyDown = (e) => {
+        if (e.key !== 'Tab') return
+        const active = document.activeElement
+        if (e.shiftKey && (active === closeRef.current || active === dialogRef.current)) {
+            e.preventDefault()
+            submitRef.current?.focus()
+        } else if (!e.shiftKey && active === submitRef.current) {
+            e.preventDefault()
+            closeRef.current?.focus()
+        }
+    }
+
+    // ── Submit ──
+    const handleSubmit = async (e) => {
+        e.preventDefault()
+        if (status !== 'idle') return
+        setAttempted(true)
+
+        if (errors.message) return messageRef.current?.focus()
+        if (errors.rating) return ratingRef.current?.focus()
+        if (errors.consent) return consentRef.current?.focus()
+
+        setStatus('sending')
+        setServerError('')
+
+        const anonymous = draft.anonymous || !draft.name.trim()
+        const payload = {
+            displayName: anonymous ? callsign : draft.name.trim(),
+            isAnonymous: anonymous,
+            category: draft.category,
+            message: draft.message.trim(),
+            rating: draft.rating,
+            isPrivate: draft.isPrivate,
+            consent: draft.consent,
+            website: honeypot, // honeypot: harus kosong
+        }
+
+        try {
+            const record = await submitWish(payload)
+            if (!mountedRef.current) return
+            sfx.reveal()
+            cbRef.current.onSaved?.(record)
+            setStatus('rise')
+            timerRef.current = setTimeout(() => cbRef.current.onDone?.(), reduce ? RISE_MS_REDUCED : RISE_MS)
+        } catch (err) {
+            if (!mountedRef.current) return
+            setStatus('idle')
+            setServerError(
+                err?.code === 'validation' || err?.code === 'rate_limit'
+                    ? err.message
+                    : 'Your wish got lost in the dark for a moment. Please try again.'
+            )
+        }
+    }
+
+    const busy = status !== 'idle'
+    const rising = status === 'rise'
+
+    const overlayStyle = viewport
+        ? { height: `${viewport.h}px`, top: `${viewport.top}px` }
+        : undefined
+
+    const content = (
+        <div className={`${styles.overlay} ${rising ? styles.overlayRise : ''}`} style={overlayStyle}>
+            <div
+                ref={dialogRef}
+                className={`${styles.box} ${rising ? styles.boxOut : ''}`}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={`${uid}-title`}
+                aria-describedby={`${uid}-notice`}
+                tabIndex={-1}
+                onKeyDown={onKeyDown}
+            >
+                <header className={styles.header}>
+                    <div>
+                        <p className={styles.eyebrow}>Wishing Star</p>
+                        <h3 id={`${uid}-title`} className={styles.title}>
+                            Whisper <em>your wish</em>
+                        </h3>
+                    </div>
+                    <button
+                        ref={closeRef}
+                        type="button"
+                        className={styles.close}
+                        onClick={handleClose}
+                        disabled={busy}
+                        aria-label="Close wish form"
+                    >
+                        ✕
+                    </button>
+                </header>
+
+                <form className={styles.form} onSubmit={handleSubmit} noValidate>
+                    <div className={styles.body}>
+                        <p id={`${uid}-notice`} className={styles.notice}>
+                            {draft.isPrivate
+                                ? 'Only the developer will read this message. Still, please don’t share personal information.'
+                                : 'Your message will be displayed in the Gallery of Astronauts for other travelers to see. Please don’t include personal information such as email, phone number or address.'}
+                        </p>
+
+                        {/* Nama + anonim */}
+                        <div className={styles.field}>
+                            <label htmlFor={`${uid}-name`} className={styles.label}>
+                                Your name <span className={styles.opt}>optional</span>
+                            </label>
+                            <input
+                                id={`${uid}-name`}
+                                type="text"
+                                className={styles.input}
+                                value={draft.anonymous ? callsign : draft.name}
+                                onChange={(e) => set({ name: e.target.value })}
+                                disabled={draft.anonymous}
+                                maxLength={NAME_MAX}
+                                placeholder="How should we call you?"
+                                autoComplete="off"
+                            />
+                            <label className={styles.switchRow}>
+                                <input
+                                    type="checkbox"
+                                    role="switch"
+                                    className={styles.hiddenInput}
+                                    checked={draft.anonymous}
+                                    onChange={(e) => set({ anonymous: e.target.checked })}
+                                />
+                                <span className={styles.switchTrack} aria-hidden="true">
+                                    <span className={styles.switchThumb} />
+                                </span>
+                                <span>Stay anonymous</span>
+                            </label>
+                            <p className={styles.hintSmall}>
+                                {draft.anonymous || !draft.name.trim()
+                                    ? `You will fly as ${callsign}.`
+                                    : 'Your name will appear on your astronaut card.'}
+                            </p>
+                        </div>
+
+                        {/* Kategori */}
+                        <fieldset className={styles.fieldset}>
+                            <legend className={styles.label}>What is this about?</legend>
+                            <div className={styles.chips}>
+                                {CATEGORIES.map((c) => (
+                                    <label key={c.id} className={styles.chip}>
+                                        <input
+                                            type="radio"
+                                            name={`${uid}-cat`}
+                                            value={c.id}
+                                            className={styles.hiddenInput}
+                                            checked={draft.category === c.id}
+                                            onChange={() => set({ category: c.id })}
+                                        />
+                                        <span className={styles.chipText}>{c.label}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </fieldset>
+
+                        {/* Pesan */}
+                        <div className={styles.field}>
+                            <label htmlFor={`${uid}-msg`} className={styles.label}>Your message</label>
+                            <textarea
+                                id={`${uid}-msg`}
+                                ref={messageRef}
+                                className={`${styles.input} ${styles.textarea} ${show.message ? styles.invalid : ''}`}
+                                rows={4}
+                                maxLength={MESSAGE_MAX}
+                                value={draft.message}
+                                onChange={(e) => set({ message: e.target.value })}
+                                placeholder="Feedback, a suggestion, or a wish for the universe…"
+                                aria-invalid={Boolean(show.message)}
+                                aria-describedby={`${uid}-count${show.message ? ` ${uid}-msg-err` : ''}`}
+                            />
+                            <div className={styles.metaRow}>
+                                <span
+                                    id={`${uid}-count`}
+                                    className={`${styles.counter} ${draft.message.length >= MESSAGE_MAX - 20 ? styles.counterNear : ''}`}
+                                >
+                                    {draft.message.length}/{MESSAGE_MAX}
+                                </span>
+                            </div>
+                            {show.message && <p id={`${uid}-msg-err`} className={styles.error}>{show.message}</p>}
+                        </div>
+
+                        {/* Rating */}
+                        <fieldset
+                            ref={ratingRef}
+                            tabIndex={-1}
+                            className={styles.fieldset}
+                            aria-describedby={show.rating ? `${uid}-rate-err` : undefined}
+                        >
+                            <legend className={styles.label}>How was your journey?</legend>
+                            <div className={styles.stars} onPointerLeave={() => setHoverRating(0)}>
+                                {[1, 2, 3, 4, 5].map((n) => {
+                                    const on = n <= (hoverRating || draft.rating)
+                                    return (
+                                        <label
+                                            key={n}
+                                            className={`${styles.star} ${on ? styles.starOn : ''}`}
+                                            onPointerEnter={(e) => e.pointerType === 'mouse' && setHoverRating(n)}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name={`${uid}-rating`}
+                                                value={n}
+                                                className={styles.hiddenInput}
+                                                checked={draft.rating === n}
+                                                onChange={() => {
+                                                    set({ rating: n })
+                                                    sfx.chime(n)
+                                                }}
+                                            />
+                                            <span aria-hidden="true">★</span>
+                                            <span className={styles.srOnly}>{n} {n === 1 ? 'star' : 'stars'}</span>
+                                        </label>
+                                    )
+                                })}
+                                <span className={styles.ratingWord} aria-hidden="true">
+                                    {RATING_WORDS[hoverRating || draft.rating]}
+                                </span>
+                            </div>
+                            {show.rating && <p id={`${uid}-rate-err`} className={styles.error}>{show.rating}</p>}
+                        </fieldset>
+
+                        {/* Private */}
+                        <label className={styles.check}>
+                            <input
+                                type="checkbox"
+                                className={styles.hiddenInput}
+                                checked={draft.isPrivate}
+                                onChange={(e) => set({ isPrivate: e.target.checked })}
+                            />
+                            <span className={styles.checkBox} aria-hidden="true">✓</span>
+                            <span>
+                                Send privately to the developer
+                                <small className={styles.checkSmall}>It won’t appear in the Gallery.</small>
+                            </span>
+                        </label>
+
+                        {/* Persetujuan tampil publik (tidak perlu untuk mode private) */}
+                        {!draft.isPrivate && (
+                            <div className={styles.field}>
+                                <label className={styles.check}>
+                                    <input
+                                        ref={consentRef}
+                                        type="checkbox"
+                                        className={styles.hiddenInput}
+                                        checked={draft.consent}
+                                        onChange={(e) => set({ consent: e.target.checked })}
+                                        aria-invalid={Boolean(show.consent)}
+                                        aria-describedby={show.consent ? `${uid}-consent-err` : undefined}
+                                    />
+                                    <span className={`${styles.checkBox} ${show.consent ? styles.checkBoxInvalid : ''}`} aria-hidden="true">✓</span>
+                                    <span>I agree that my message may be shown publicly in the Gallery of Astronauts.</span>
+                                </label>
+                                {show.consent && <p id={`${uid}-consent-err`} className={styles.error}>{show.consent}</p>}
+                            </div>
+                        )}
+
+                        {/* Honeypot (disiapkan untuk fase backend): manusia tidak melihatnya */}
+                        <div className={styles.hp} aria-hidden="true">
+                            <label>
+                                Website
+                                <input
+                                    type="text"
+                                    name="website"
+                                    tabIndex={-1}
+                                    autoComplete="off"
+                                    value={honeypot}
+                                    onChange={(e) => setHoneypot(e.target.value)}
+                                />
+                            </label>
+                        </div>
+                    </div>
+
+                    {/* Footer selalu terlihat (di luar area scroll) */}
+                    <div className={styles.footer}>
+                        {serverError && <p role="alert" className={`${styles.error} ${styles.serverError}`}>{serverError}</p>}
+                        <button ref={submitRef} type="submit" className={styles.submit} disabled={status === 'sending'} aria-busy={status === 'sending'}>
+                            {status === 'sending' ? 'Sending to the stars…' : draft.isPrivate ? 'Send privately ✦' : 'Send my wish ✦'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            {/* Bintang permintaan naik */}
+            {rising && (
+                <div className={styles.rise} aria-hidden="true">
+                    <span className={styles.riseStar}>✦</span>
+                    <p className={styles.riseText}>Your wish is rising to the stars…</p>
+                </div>
+            )}
+            <div role="status" className={styles.srOnly}>
+                {rising ? 'Your wish is rising to the stars.' : ''}
+            </div>
+        </div>
+    )
+
+    return createPortal(content, document.body)
+}
+===== END FILE =====
+
+===== FILE: src/data/dummyWishes.js =====
+// ============================================================
+// COSMIC JOURNEY — Data dummy Gallery (Fase 4)
+// Hanya dipakai src/services/wishes.js > getWishes(). Fase 6: file ini tidak dipakai lagi
+// (boleh dihapus) karena data datang dari Supabase.
+// Termasuk 1 entri private + 1 entri pending agar filter di getWishes() teruji.
+// ============================================================
+
+const NOW = Date.now()
+const ago = (hours) => new Date(NOW - hours * 3600 * 1000).toISOString()
+
+export const DUMMY_WISHES = [
+    {
+        id: 'd01', displayName: 'Astronaut-7F2', isAnonymous: true, category: 'wish', rating: 5,
+        message: 'Wishing for a quiet year and a very long sunrise.',
+        createdAt: ago(2), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd02', displayName: 'Maya', isAnonymous: false, category: 'feedback', rating: 5,
+        message: 'The moment my name turned into a constellation I actually gasped. The music, the pacing, all of it. It felt like someone built a tiny universe just for me.',
+        createdAt: ago(5), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd03', displayName: 'Astronaut-K9Q', isAnonymous: true, category: 'suggestion', rating: 4,
+        message: 'Would love a way to save my constellation as an image to share. Also the planet facts could use a tiny "read more" link!',
+        createdAt: ago(9), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd04', displayName: 'Rizky', isAnonymous: false, category: 'feedback', rating: 5,
+        message: 'Mantap! Animasi roketnya halus banget di HP saya. Terima kasih sudah bikin ini 🚀',
+        createdAt: ago(14), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd05', displayName: 'Lina Park', isAnonymous: false, category: 'suggestion', rating: 4,
+        message: 'Could the Solar System have a scale toggle? Seeing the real distances between planets would be so humbling.',
+        createdAt: ago(20), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd06', displayName: 'Astronaut-B3M', isAnonymous: true, category: 'wish', rating: 5,
+        message: 'I wish for my grandmother to see another spring.',
+        createdAt: ago(27), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd07', displayName: 'Theo', isAnonymous: false, category: 'feedback', rating: 3,
+        message: 'Beautiful, but the intro loaded slowly on my old phone. Once it started it was great though.',
+        createdAt: ago(40), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd08', displayName: 'Sari', isAnonymous: false, category: 'developer', rating: 5,
+        message: 'Whoever built this: you have a gift for making people feel small in the best way. Please keep making things like this.',
+        createdAt: ago(53), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd09', displayName: 'Astronaut-X4D', isAnonymous: true, category: 'feedback', rating: 4,
+        message: 'Loved the deep space part. The hold-to-travel button was a neat idea.',
+        createdAt: ago(70), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd10', displayName: 'Omar', isAnonymous: false, category: 'wish', rating: 5,
+        message: 'For everyone who looked up tonight and felt a little less alone.',
+        createdAt: ago(95), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd11', displayName: 'Dewi', isAnonymous: false, category: 'suggestion', rating: 5,
+        message: 'Tambahkan bahasa Indonesia ya, biar adik-adik saya bisa ikut baca. Konsepnya keren sekali!',
+        createdAt: ago(120), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd12', displayName: 'Astronaut-9HN', isAnonymous: true, category: 'wish', rating: 4,
+        message: 'Wish: pass my exams. Also a cat.',
+        createdAt: ago(150), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd13', displayName: 'Jonas', isAnonymous: false, category: 'feedback', rating: 5,
+        message: 'Found the brightest falling star on my third try. Why did that feel like winning a prize?',
+        createdAt: ago(200), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd14', displayName: 'Astronaut-Q2W', isAnonymous: true, category: 'developer', rating: 5,
+        message: 'Is this built with react-three-fiber? The planets look so good. I would happily read a write-up on how you made it.',
+        createdAt: ago(260), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd15', displayName: 'Nadia', isAnonymous: false, category: 'wish', rating: 5,
+        message: 'I am writing this from a hospital waiting room, and for five minutes I forgot where I was. Thank you for that. I am wishing for good news tomorrow, for me and for everyone sitting in these chairs.',
+        createdAt: ago(330), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd16', displayName: 'Kenji', isAnonymous: false, category: 'suggestion', rating: 4,
+        message: 'A tiny shooting-star sound when the page changes would be lovely.',
+        createdAt: ago(420), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd17', displayName: 'Astronaut-L6T', isAnonymous: true, category: 'feedback', rating: 2,
+        message: 'The music did not start until I tapped a few times, and the volume was too low on my phone. The rest is lovely.',
+        createdAt: ago(500), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd18', displayName: 'Bima', isAnonymous: false, category: 'feedback', rating: 5,
+        message: 'Keren banget transisinya, kayak beneran terbang melewati tata surya.',
+        createdAt: ago(600), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd19', displayName: 'Clara', isAnonymous: false, category: 'wish', rating: 4,
+        message: 'May all my plants survive the summer.',
+        createdAt: ago(750), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd20', displayName: 'Astronaut-V8R', isAnonymous: true, category: 'suggestion', rating: 5,
+        message: 'Please add a section about black holes with that same gentle narration. I would stay there for hours.',
+        createdAt: ago(900), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd21', displayName: 'Hana', isAnonymous: false, category: 'developer', rating: 5,
+        message: 'Thank you for making something purely beautiful. No ads, no signup, just stars. It reminded me why I fell in love with the internet.',
+        createdAt: ago(1100), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd22', displayName: 'Farid', isAnonymous: false, category: 'feedback', rating: 4,
+        message: 'Smooth on desktop. The Phenomena section is my favourite.',
+        createdAt: ago(1400), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd23', displayName: 'Astronaut-C5J', isAnonymous: true, category: 'wish', rating: 5,
+        message: 'I wish my dad would call more. I wish I would call him more, too.',
+        createdAt: ago(1800), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd24', displayName: 'Elena', isAnonymous: false, category: 'suggestion', rating: 3,
+        message: 'Some text is a bit small and dim on my phone in daylight. A slightly brighter colour would help.',
+        createdAt: ago(2200), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd25', displayName: 'Putra', isAnonymous: false, category: 'wish', rating: 5,
+        message: 'Semoga semua orang yang baca ini hari-harinya dimudahkan. Amin.',
+        createdAt: ago(2600), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd26', displayName: 'Astronaut-M7S', isAnonymous: true, category: 'feedback', rating: 4,
+        message: 'Showed this to my kids and they asked to go around twice.',
+        createdAt: ago(3000), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd27', displayName: 'Iris', isAnonymous: false, category: 'wish', rating: 5,
+        message: 'Wishing for courage. The kind that does not feel like courage until it is over.',
+        createdAt: ago(3400), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd28', displayName: 'Daniel', isAnonymous: false, category: 'feedback', rating: 4,
+        message: 'Great experience overall. The ending message gave me chills.',
+        createdAt: ago(3800), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd29', displayName: 'Astronaut-F3Z', isAnonymous: true, category: 'developer', rating: 5,
+        message: 'Any chance of open-sourcing the falling star mini-game? I would love to learn from it.',
+        createdAt: ago(4200), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd30', displayName: 'Ayu', isAnonymous: false, category: 'wish', rating: 5,
+        message: 'Semoga kita semua bisa pulang dengan selamat, ke tempat yang kita sebut rumah.',
+        createdAt: ago(4600), status: 'approved', isPrivate: false,
+    },
+
+    // Tidak boleh pernah muncul di Gallery (diuji oleh getWishes):
+    {
+        id: 'd31', displayName: 'Astronaut-P1X', isAnonymous: true, category: 'developer', rating: 1,
+        message: 'Private note to the developer: this should never be shown.',
+        createdAt: ago(10), status: 'approved', isPrivate: true,
+    },
+    {
+        id: 'd32', displayName: 'Waiting-Room', isAnonymous: false, category: 'feedback', rating: 5,
+        message: 'Still pending review, so not public yet.',
+        createdAt: ago(1), status: 'pending', isPrivate: false,
+    },
+]
+===== END FILE =====
+
+===== FILE: src/sections/Ending.jsx =====
+import { useState, useEffect, useMemo, memo } from 'react'
+import { sfx } from '../hooks/useSfx.js'
+import styles from './Ending.module.css'
+
+// ── DATA PESAN SEMESTA ───────────────────────────────────────────────
+const COSMIC_MESSAGES = [
+  "You are made of starstuff. Your potential is as limitless as the expanding universe.",
+  "Even the brightest stars burn out, but their light travels forever. Leave your light.",
+  "In the grand cosmic dance, your existence is a beautiful statistical impossibility. Cherish it.",
+  "Do not fear the void. It is the canvas upon which your light shines the brightest.",
+  "Time is relative, but your impact is absolute. The cosmos remembers you."
+]
+
+const ALPHABET_POINTS = {
+  A: [[20, 90], [50, 10], [80, 90], [65, 50], [35, 50]],
+  B: [[20, 10], [20, 90], [20, 50], [60, 50], [70, 70], [60, 90], [20, 90], [20, 10], [60, 10], [70, 30], [60, 50]],
+  C: [[80, 20], [60, 10], [30, 20], [20, 50], [30, 80], [60, 90], [80, 80]],
+  D: [[20, 10], [20, 90], [50, 90], [70, 70], [70, 30], [50, 10], [20, 10]],
+  E: [[80, 10], [20, 10], [20, 50], [60, 50], [20, 50], [20, 90], [80, 90]],
+  F: [[80, 10], [20, 10], [20, 50], [60, 50], [20, 50], [20, 90]],
+  G: [[80, 20], [60, 10], [30, 20], [20, 50], [30, 80], [60, 90], [80, 80], [80, 50], [50, 50]],
+  H: [[20, 10], [20, 90], [20, 50], [80, 50], [80, 10], [80, 90]],
+  I: [[30, 10], [70, 10], [50, 10], [50, 90], [30, 90], [70, 90]],
+  J: [[20, 70], [40, 90], [60, 90], [80, 70], [80, 10]],
+  K: [[20, 10], [20, 90], [20, 50], [80, 10], [20, 50], [80, 90]],
+  L: [[20, 10], [20, 90], [80, 90]],
+  M: [[20, 90], [20, 10], [50, 50], [80, 10], [80, 90]],
+  N: [[20, 90], [20, 10], [80, 90], [80, 10]],
+  O: [[50, 10], [20, 30], [20, 70], [50, 90], [80, 70], [80, 30], [50, 10]],
+  P: [[20, 90], [20, 10], [60, 10], [80, 30], [60, 50], [20, 50]],
+  Q: [[50, 10], [20, 30], [20, 70], [50, 90], [80, 70], [80, 30], [50, 10], [70, 70], [90, 90]],
+  R: [[20, 90], [20, 10], [60, 10], [80, 30], [60, 50], [20, 50], [50, 50], [80, 90]],
+  S: [[80, 20], [50, 10], [20, 30], [50, 50], [80, 70], [50, 90], [20, 80]],
+  T: [[10, 10], [90, 10], [50, 10], [50, 90]],
+  U: [[20, 10], [20, 70], [40, 90], [60, 90], [80, 70], [80, 10]],
+  V: [[20, 10], [50, 90], [80, 10]],
+  W: [[10, 10], [30, 90], [50, 50], [70, 90], [90, 10]],
+  X: [[20, 10], [80, 90], [50, 50], [80, 10], [20, 90]],
+  Y: [[20, 10], [50, 50], [80, 10], [50, 50], [50, 90]],
+  Z: [[20, 10], [80, 10], [20, 90], [80, 90]]
+}
+
+// Bangun titik rasi bintang dari huruf pertama nama (dipakai tampilan + kartu share)
+function makeConstellation(name) {
+  let char = name.trim().charAt(0).toUpperCase()
+  if (!ALPHABET_POINTS[char]) char = 'O'
+  return ALPHABET_POINTS[char].map(([x, y]) => ({
+    x: 90 + x * 1.2 + (Math.random() - 0.5) * 8,
+    y: 20 + y * 1.2 + (Math.random() - 0.5) * 8,
+  }))
+}
+
+function LetterConstellation({ name, points }) {
+  return (
+    <div className={styles.constellationWrap}>
+      <svg viewBox="0 0 300 160" className={styles.constellationSvg}>
+        {points.map((p, i) => {
+          const next = points[i + 1]
+          return next ? (
+            <line key={`line-${i}`} x1={p.x} y1={p.y} x2={next.x} y2={next.y} stroke="rgba(136, 170, 255, 0.4)" strokeWidth="1.5" strokeDasharray="4 4" />
+          ) : null
+        })}
+        {points.map((p, i) => (
+          <g key={`star-${i}`}>
+            <circle cx={p.x} cy={p.y} r="4" fill="#ffffff" filter="drop-shadow(0 0 6px rgba(136, 170, 255, 0.8))" />
+            <circle cx={p.x} cy={p.y} r="1.5" fill="#fff" />
+          </g>
+        ))}
+      </svg>
+      <p className={styles.constellationLabel}>Constellation {name}</p>
+    </div>
+  )
+}
+
+// ── SHARE CARD: render konstelasi + pesan ke PNG 1080×1350 ─────────────
+function wrapLines(g, text, maxWidth) {
+  const words = text.split(' ')
+  const lines = []
+  let line = ''
+  for (const w of words) {
+    const test = line ? `${line} ${w}` : w
+    if (g.measureText(test).width > maxWidth && line) {
+      lines.push(line)
+      line = w
+    } else {
+      line = test
+    }
+  }
+  if (line) lines.push(line)
+  return lines
+}
+
+async function drawShareCard({ name, from, message, points, coords }) {
+  try {
+    await Promise.all([
+      document.fonts.load('italic 300 60px "Cormorant Garamond"'),
+      document.fonts.load('300 24px "Outfit"'),
+      document.fonts.load('400 24px "Outfit"'),
+    ])
+  } catch (_) { /* font fallback */ }
+
+  const W = 1080, H = 1350
+  const canvas = document.createElement('canvas')
+  canvas.width = W
+  canvas.height = H
+  const g = canvas.getContext('2d')
+  const serif = '"Cormorant Garamond", Georgia, serif'
+  const sans = '"Outfit", system-ui, sans-serif'
+  // Warna teks kecil di kartu: lantai sama dengan --text-muted (#9fb0d4)
+  const MUTED = '#9fb0d4'
+  const setSpacing = (px) => { if ('letterSpacing' in g) g.letterSpacing = `${px}px` }
+
+  // background
+  const bg = g.createLinearGradient(0, 0, 0, H)
+  bg.addColorStop(0, '#02021a')
+  bg.addColorStop(0.55, '#0b0720')
+  bg.addColorStop(1, '#16091f')
+  g.fillStyle = bg
+  g.fillRect(0, 0, W, H)
+
+  // soft nebula washes
+  const wash = (x, y, r, color) => {
+    const rg = g.createRadialGradient(x, y, 0, x, y, r)
+    rg.addColorStop(0, color)
+    rg.addColorStop(1, 'rgba(0,0,0,0)')
+    g.fillStyle = rg
+    g.fillRect(0, 0, W, H)
+  }
+  wash(220, 260, 520, 'rgba(80,110,255,0.16)')
+  wash(900, 1050, 560, 'rgba(160,80,255,0.14)')
+
+  // star dust
+  for (let i = 0; i < 320; i++) {
+    const r = Math.random() * 1.6 + 0.3
+    g.fillStyle = `rgba(210,225,255,${Math.random() * 0.7 + 0.15})`
+    g.beginPath()
+    g.arc(Math.random() * W, Math.random() * H, r, 0, Math.PI * 2)
+    g.fill()
+  }
+
+  // frame
+  g.strokeStyle = 'rgba(136,170,255,0.25)'
+  g.lineWidth = 2
+  g.beginPath()
+  g.roundRect ? g.roundRect(40, 40, W - 80, H - 80, 28) : g.rect(40, 40, W - 80, H - 80)
+  g.stroke()
+
+  // constellation (fit into 520×340 area centred at y=330)
+  const xs = points.map((p) => p.x), ys = points.map((p) => p.y)
+  const minX = Math.min(...xs), maxX = Math.max(...xs)
+  const minY = Math.min(...ys), maxY = Math.max(...ys)
+  const scale = Math.min(520 / ((maxX - minX) || 1), 340 / ((maxY - minY) || 1))
+  const pts = points.map((p) => ({
+    x: W / 2 + (p.x - (minX + maxX) / 2) * scale,
+    y: 330 + (p.y - (minY + maxY) / 2) * scale,
+  }))
+
+  g.strokeStyle = 'rgba(136,170,255,0.55)'
+  g.lineWidth = 2.5
+  g.setLineDash([10, 10])
+  g.beginPath()
+  pts.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)))
+  g.stroke()
+  g.setLineDash([])
+
+  pts.forEach((p) => {
+    const halo = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, 30)
+    halo.addColorStop(0, 'rgba(160,190,255,0.85)')
+    halo.addColorStop(1, 'rgba(160,190,255,0)')
+    g.fillStyle = halo
+    g.fillRect(p.x - 30, p.y - 30, 60, 60)
+    g.fillStyle = '#fff'
+    g.beginPath()
+    g.arc(p.x, p.y, 7, 0, Math.PI * 2)
+    g.fill()
+  })
+
+  g.textAlign = 'center'
+
+  // label under constellation
+  g.fillStyle = MUTED
+  g.font = `400 24px ${sans}`
+  setSpacing(5)
+  g.fillText(`CONSTELLATION ${name.toUpperCase()}`, W / 2, 560)
+
+  // divider
+  g.strokeStyle = 'rgba(255,255,255,0.12)'
+  g.lineWidth = 1
+  g.beginPath()
+  g.moveTo(160, 600)
+  g.lineTo(W - 160, 600)
+  g.stroke()
+
+  // header
+  g.fillStyle = MUTED
+  g.font = `400 24px ${sans}`
+  setSpacing(4)
+  g.fillText('DECRYPTED TRANSMISSION', W / 2, 668)
+  setSpacing(0)
+
+  // "Dear Name," mengecil sampai muat
+  let size = 70
+  g.fillStyle = '#aaccff'
+  do {
+    g.font = `italic 300 ${size}px ${serif}`
+    size -= 4
+  } while (g.measureText(`Dear ${name},`).width > 880 && size > 30)
+  g.fillText(`Dear ${name},`, W / 2, 770)
+
+  // message: font mengecil sampai muat di atas tanda tangan/footer
+  g.fillStyle = '#e0e5ff'
+  let msgSize = 54
+  let lines = []
+  while (true) {
+    g.font = `italic 300 ${msgSize}px ${serif}`
+    lines = wrapLines(g, `“${message}”`, 840)
+    if (lines.length * msgSize * 1.45 <= 270 || msgSize <= 32) break
+    msgSize -= 2
+  }
+  const lh = msgSize * 1.45
+  lines.forEach((ln, i) => g.fillText(ln, W / 2, 870 + i * lh))
+
+  // signature (untuk "someone else")
+  if (from) {
+    const sigY = Math.min(870 + (lines.length - 1) * lh + 105, 1185)
+    g.fillStyle = MUTED
+    g.font = `400 24px ${sans}`
+    setSpacing(3)
+    g.fillText('WITH COSMIC LOVE,', W / 2, sigY - 44)
+    setSpacing(0)
+    let sigSize = 56
+    g.fillStyle = '#ff99cc'
+    do {
+      g.font = `italic 300 ${sigSize}px ${serif}`
+      sigSize -= 4
+    } while (g.measureText(from).width > 700 && sigSize > 28)
+    g.fillText(from, W / 2, sigY + 8)
+  }
+
+  // footer
+  g.fillStyle = MUTED
+  g.font = `400 24px ${sans}`
+  setSpacing(4)
+  g.fillText('COSMIC JOURNEY', W / 2, H - 110)
+  g.font = `400 21px ${sans}`
+  setSpacing(2)
+  g.fillText(`COSMIC COORDS: ${coords}`, W / 2, H - 76)
+  setSpacing(0)
+
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
+}
+
+// ── KOMPONEN BINTANG GEMERLAP (BACKGROUND KARTU) ──────────────────────
+function ModalStars() {
+  const stars = useMemo(() => Array.from({ length: 60 }).map(() => ({
+    x: Math.random() * 100,
+    y: Math.random() * 100,
+    size: Math.random() * 2 + 1,
+    delay: Math.random() * 4,
+    duration: Math.random() * 2 + 2
+  })), [])
+
+  return (
+    <div className={styles.modalStarsWrap}>
+      {stars.map((s, i) => (
+        <div key={i} className={styles.modalStar} style={{
+          left: `${s.x}%`, top: `${s.y}%`,
+          width: `${s.size}px`, height: `${s.size}px`,
+          animationDelay: `${s.delay}s`,
+          animationDuration: `${s.duration}s`
+        }} />
+      ))}
+    </div>
+  )
+}
+
+// ── KOMPONEN HEART SUPERNOVA (LEDAKAN HATI RANDOM) ────────────────────
+function HeartSupernovas() {
+  const [novas, setNovas] = useState([])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNovas((prev) => {
+        const newNova = {
+          id: Date.now() + Math.random(),
+          x: Math.random() * 100,
+          y: Math.random() * 100,
+          scale: Math.random() * 1.5 + 1.5, // Skala acak
+          color: ['#ff99cc', '#ffb3e6', '#e6ccff', '#ffccff', '#ffd700'][Math.floor(Math.random() * 5)]
+        }
+        return [...prev.slice(-4), newNova] // Maksimal 5 ledakan di DOM
+      })
+    }, 1800) // Meledak setiap 1.8 detik
+
+    return () => clearInterval(interval)
+  }, [])
+
+  return (
+    <div className={styles.heartNovaWrap}>
+      {novas.map((nova) => (
+        <div key={nova.id} className={styles.heartNova} style={{
+          left: `${nova.x}%`, top: `${nova.y}%`,
+          '--nova-scale': nova.scale,
+          '--nova-color': nova.color
+        }}>
+          {/* SVG Hati */}
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+          </svg>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── KOMPONEN UTAMA ENDING ─────────────────────────────────────────────
+function Ending({ visitor, onReveal, onNext, onBackToChoices, resumeMessage = false }) {
+  const { name: recipient, sender, constellationPoints: constellation, finalMessage, coords, wishSubmitted } = visitor
+  const isOther = Boolean(sender)
+  const hasMessage = Boolean(finalMessage)
+  // Wish sudah terkirim (datang dari Secret Ending): tombol utama kembali ke pilihan, bukan mengulang Wishing
+  const canGoBackToChoices = Boolean(wishSubmitted && onBackToChoices)
+
+  const [isHovered, setIsHovered] = useState(false)
+  // Kembali dari Secret Ending ("Stay with my constellation"): langsung buka pesan lagi
+  const [modalState, setModalState] = useState(resumeMessage && hasMessage ? 'message' : 'closed')
+  const [formData, setFormData] = useState({ type: 'self', name: '', from: '', to: '', note: '' })
+  const [sharing, setSharing] = useState(false)
+
+  const handleOpenForm = () => {
+    sfx.open()
+    setModalState('form')
+    setFormData({ type: 'self', name: '', from: '', to: '', note: '' })
+  }
+
+  const handleReveal = (e) => {
+    e.preventDefault()
+
+    let name = ''
+    let from = ''
+    let message = ''
+    if (formData.type === 'self') {
+      name = formData.name.trim()
+      if (!name) return
+      message = COSMIC_MESSAGES[Math.floor(Math.random() * COSMIC_MESSAGES.length)]
+    } else {
+      name = formData.to.trim()
+      from = formData.from.trim()
+      if (!name || !from) return
+      message = formData.note.trim() || COSMIC_MESSAGES[Math.floor(Math.random() * COSMIC_MESSAGES.length)]
+    }
+
+    // Data pengunjung disimpan di App (state in-memory, tanpa localStorage)
+    onReveal({
+      name,
+      sender: from,
+      finalMessage: message,
+      constellationPoints: makeConstellation(name),
+      coords: `${Math.random().toFixed(4)} N, ${Math.random().toFixed(4)} W`,
+    })
+    sfx.reveal()
+    setModalState('message')
+  }
+
+  // X / Esc pada pesan: hanya menutup pesan (tombol lanjut muncul di halaman)
+  const handleCloseMessage = () => {
+    sfx.click()
+    setModalState('closed')
+  }
+
+  const handleShareCard = async () => {
+    if (sharing) return
+    setSharing(true)
+    sfx.click()
+    try {
+      const blob = await drawShareCard({ name: recipient, from: sender, message: finalMessage, points: constellation, coords })
+      if (!blob) return
+      const safe = recipient.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'cosmic'
+      const file = new File([blob], `constellation-${safe}.png`, { type: 'image/png' })
+
+      // Mobile: native share sheet. Desktop / tidak didukung: download.
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: 'A message from the universe' })
+          return
+        } catch (err) {
+          if (err && err.name === 'AbortError') return
+        }
+      }
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = file.name
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } finally {
+      setSharing(false)
+    }
+  }
+
+  // Esc: tutup form / tutup pesan saja
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return
+      if (modalState === 'form') setModalState('closed')
+      else if (modalState === 'message') setModalState('closed')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [modalState])
+
+  return (
+    <section id="ending" className={`cosmic-section ${styles.ending}`}>
+      <div className={styles.bgGradient} />
+      <div className="noise-overlay" />
+
+      <div className={styles.eclipseContainer}>
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div
+            key={i}
+            className={`${styles.recordRing} ${isHovered ? styles.ringActive : ''}`}
+            style={{ '--i': i }}
+          />
+        ))}
+        <div className={styles.eclipseCore} />
+      </div>
+
+      <div className={styles.content}>
+        <p className={`t-label ${styles.eyebrow}`}>
+          Final Transmission
+        </p>
+
+        <h2 className={styles.title}>
+          The Universe<br />
+          <em>has a message for you</em>
+        </h2>
+
+        <p className={styles.sub}>
+          You have traveled 13.8 billion years of cosmic history.<br />
+          You have witnessed the birth and death of stars.<br />
+          Now — receive what the cosmos wishes to say.
+        </p>
+
+        <button
+          className={styles.messageBtn}
+          onClick={handleOpenForm}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          <span className={styles.btnStar}>✦</span>
+          Receive your message
+          <span className={styles.btnStar}>✦</span>
+        </button>
+
+        {hasMessage && modalState === 'closed' && (
+          canGoBackToChoices ? (
+            <button className={styles.nextBtn} onClick={() => { sfx.click(); onBackToChoices() }}>
+              Back to choices ✦
+            </button>
+          ) : (
+            <button className={styles.nextBtn} onClick={() => { sfx.click(); onNext?.() }}>
+              Next: Make a Wish ✦
+            </button>
+          )
+        )}
+
+        <p className={styles.footer}>
+          Every journey through the cosmos begins and ends at home.
+        </p>
+      </div>
+
+      <div className={`${styles.modalOverlay} ${modalState !== 'closed' ? styles.modalOpen : ''}`}>
+
+        {/* Latar belakang khusus saat pesan muncul (gemerlap & supernova) */}
+        {modalState === 'message' && (
+          <>
+            <ModalStars />
+            <HeartSupernovas />
+          </>
+        )}
+
+        {modalState === 'form' && (
+          <div className={styles.modalBox}>
+            <button className={styles.closeBtn} onClick={() => setModalState('closed')} aria-label="Close form">✕</button>
+            <h3 className={styles.modalTitle}>Set Transmission Target</h3>
+
+            <form onSubmit={handleReveal} className={styles.formContainer}>
+              <div className={styles.radioGroup}>
+                <label className={formData.type === 'self' ? styles.radioActive : ''}>
+                  <input type="radio" name="type" checked={formData.type === 'self'} onChange={() => setFormData({ ...formData, type: 'self' })} />
+                  For Myself
+                </label>
+                <label className={formData.type === 'other' ? styles.radioActiveOther : ''}>
+                  <input type="radio" name="type" checked={formData.type === 'other'} onChange={() => setFormData({ ...formData, type: 'other' })} />
+                  For Someone Else ✨
+                </label>
+              </div>
+
+              {formData.type === 'self' ? (
+                <input
+                  type="text"
+                  placeholder="Enter your name..."
+                  className={styles.nameInput}
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  required
+                  maxLength={30}
+                />
+              ) : (
+                <div className={styles.validationBox}>
+                  <p className={styles.validationHint}>Who is this transmission from, and for whom? 💌</p>
+                  <input
+                    type="text"
+                    placeholder="From (your name)..."
+                    className={styles.nameInput}
+                    value={formData.from}
+                    onChange={(e) => setFormData({ ...formData, from: e.target.value })}
+                    required
+                    maxLength={30}
+                  />
+                  <input
+                    type="text"
+                    placeholder="To (their name)..."
+                    className={styles.nameInput}
+                    value={formData.to}
+                    onChange={(e) => setFormData({ ...formData, to: e.target.value })}
+                    required
+                    maxLength={30}
+                  />
+                  <textarea
+                    placeholder="Write your own message — or leave empty and let the universe write one"
+                    className={`${styles.nameInput} ${styles.noteInput}`}
+                    value={formData.note}
+                    onChange={(e) => setFormData({ ...formData, note: e.target.value })}
+                    rows={4}
+                    maxLength={240}
+                  />
+                </div>
+              )}
+
+              <button type="submit" className={styles.submitBtn}>Decode Message →</button>
+            </form>
+          </div>
+        )}
+
+        {modalState === 'message' && (
+          <div className={styles.ticketBox}>
+            <button className={styles.closeBtn} onClick={handleCloseMessage} aria-label="Close message">✕</button>
+
+            <div className={styles.ticketContent}>
+              <LetterConstellation name={recipient} points={constellation} />
+              <p className={`t-label ${styles.ticketLabel}`}>DECRYPTED TRANSMISSION</p>
+              <h3 className={styles.recipientName}>
+                Dear <span className={styles.highlightName}>{recipient}</span>,
+              </h3>
+              <p className={styles.finalMessageText}>"{finalMessage}"</p>
+
+              {isOther && (
+                <div className={styles.signOff}>
+                  <p>With cosmic love,</p>
+                  <p className={styles.signature}>{sender}</p>
+                </div>
+              )}
+
+              <div className={styles.ticketFooter}>
+                <span>COSMIC COORDS: {coords}</span>
+                <span>STATUS: DELIVERED</span>
+              </div>
+              <button className={styles.shareBtn} onClick={handleShareCard} disabled={sharing}>
+                {sharing ? 'Rendering card…' : '✦ Save as card'}
+              </button>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </section>
+  )
+}
+
+export default memo(Ending)
+===== END FILE =====
+
+===== FILE: src/sections/Gallery.jsx =====
+// src/sections/Gallery.jsx [UBAH: menimpa file lama]
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import styles from './Gallery.module.css'
+import { getWishes, CATEGORIES, PAGE_SIZE } from '../services/wishes.js'
+import { sfx } from '../hooks/useSfx.js'
+
+const CATEGORY_LABEL = Object.fromEntries(CATEGORIES.map((c) => [c.id, c.label]))
+const SORTS = [
+    { id: 'newest', label: 'Newest' },
+    { id: 'rating', label: 'Highest rated' },
+]
+
+// Bintang kecil berdenyut di latar (posisi deterministik, dihitung sekali)
+const STAR_DOTS = Array.from({ length: 32 }, (_, i) => {
+    const r = (n) => {
+        const x = Math.sin(i * 12.9898 + n * 78.233) * 43758.5453
+        return x - Math.floor(x)
+    }
+    return { left: r(1) * 100, top: r(2) * 100, size: 1 + r(3) * 2, delay: r(4) * 5, dur: 3 + r(5) * 4 }
+})
+
+function timeAgo(iso) {
+    const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000)
+    if (s < 60) return 'just now'
+    const m = Math.floor(s / 60)
+    if (m < 60) return `${m}m ago`
+    const h = Math.floor(m / 60)
+    if (h < 24) return `${h}h ago`
+    const d = Math.floor(h / 24)
+    if (d < 7) return `${d}d ago`
+    const w = Math.floor(d / 7)
+    if (d < 30) return `${w}w ago`
+    const mo = Math.floor(d / 30)
+    if (mo < 12) return `${mo}mo ago`
+    return `${Math.floor(d / 365)}y ago`
+}
+
+function Helmet() {
+    return (
+        <svg className={styles.helmet} viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+            <path d="M16 3C9 3 4.5 8 4.5 14.5V19c0 4 3 7 6.5 7h10c3.5 0 6.500-3 6.500-7v-4.500C27.500 8 23 3 16 3z"
+                fill="none" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M9 13.500c0-2.800 2.800-4.800 7-4.800s7 2 7 4.800v2.200c0 2.600-2.800 4.300-7 4.300s-7-1.700-7-4.300z"
+                fill="rgba(136,170,255,0.18)" stroke="currentColor" strokeWidth="1.2" />
+            <path d="M11.500 12c1-.9 2.300-1.300 3.800-1.300" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+    )
+}
+
+function Stars({ value }) {
+    return (
+        <span className={styles.stars} role="img" aria-label={`Rated ${value} out of 5`}>
+            {[1, 2, 3, 4, 5].map((n) => (
+                <span key={n} aria-hidden="true" className={n <= value ? styles.starOn : styles.starOff}>★</span>
+            ))}
+        </span>
+    )
+}
+
+function Card({ item, mine }) {
+    return (
+        <article className={`${styles.card} ${mine ? styles.mine : ''}`}>
+            {mine && <span className={styles.yourBadge}>Your wish</span>}
+            <header className={styles.cardHead}>
+                <Helmet />
+                <div className={styles.who}>
+                    <span className={styles.name}>{item.displayName}</span>
+                    <span className={styles.role}>{item.isAnonymous ? 'Anonymous astronaut' : 'Astronaut'}</span>
+                </div>
+                <Stars value={item.rating} />
+            </header>
+            <p className={styles.message}>{item.message}</p>
+            <footer className={styles.cardFoot}>
+                <span className={styles.cat}>{CATEGORY_LABEL[item.category] ?? item.category}</span>
+                <time className={styles.time} dateTime={item.createdAt}>{timeAgo(item.createdAt)}</time>
+            </footer>
+        </article>
+    )
+}
+
+function Skeletons() {
+    return (
+        <div className={styles.grid} role="status" aria-label="Loading messages">
+            {Array.from({ length: 6 }, (_, i) => (
+                <div key={i} className={`${styles.card} ${styles.skel}`} aria-hidden="true">
+                    <div className={styles.skelLine} style={{ width: '55%' }} />
+                    <div className={styles.skelLine} style={{ width: '95%' }} />
+                    <div className={styles.skelLine} style={{ width: '80%' }} />
+                    <div className={styles.skelLine} style={{ width: '35%' }} />
+                </div>
+            ))}
+        </div>
+    )
+}
+
+function Gallery({ visitor, onBackToConstellation, onReturnHome }) {
+    const [sort, setSort] = useState('newest')
+    const [category, setCategory] = useState('all')
+    const [items, setItems] = useState([])
+    const [nextCursor, setNextCursor] = useState(null)
+    const [aggregate, setAggregate] = useState(null)
+    const [status, setStatus] = useState('loading') // loading | ready | error
+    const [more, setMore] = useState('idle')        // idle | loading | error
+    const [retryKey, setRetryKey] = useState(0)
+    const reqRef = useRef(0)
+
+    const mySubmission = visitor?.mySubmission
+    const cameFromSecret = Boolean(visitor?.wishSubmitted || mySubmission)
+    const showMine = Boolean(
+        mySubmission && !mySubmission.isPrivate && (category === 'all' || mySubmission.category === category)
+    )
+
+    useEffect(() => {
+        const id = ++reqRef.current
+        setStatus('loading')
+        setMore('idle')
+        setItems([])
+        setNextCursor(null)
+        getWishes({ sort, category, limit: PAGE_SIZE })
+            .then((res) => {
+                if (id !== reqRef.current) return
+                setItems(res.items)
+                setNextCursor(res.nextCursor)
+                setAggregate(res.aggregate)
+                setStatus('ready')
+            })
+            .catch(() => {
+                if (id !== reqRef.current) return
+                setStatus('error')
+            })
+        return () => { reqRef.current++ } // abaikan respons yang datang setelah unmount/ganti filter
+    }, [sort, category, retryKey])
+
+    const loadMore = useCallback(() => {
+        if (!nextCursor || more === 'loading') return
+        sfx.click()
+        const id = reqRef.current
+        setMore('loading')
+        getWishes({ sort, category, cursor: nextCursor, limit: PAGE_SIZE })
+            .then((res) => {
+                if (id !== reqRef.current) return
+                setItems((prev) => {
+                    const seen = new Set(prev.map((i) => i.id))
+                    return [...prev, ...res.items.filter((i) => !seen.has(i.id))]
+                })
+                setNextCursor(res.nextCursor)
+                setMore('idle')
+            })
+            .catch(() => {
+                if (id !== reqRef.current) return
+                setMore('error')
+            })
+    }, [nextCursor, more, sort, category])
+
+    const pick = (setter, value, current) => {
+        if (value === current) return
+        sfx.click()
+        setter(value)
+    }
+
+    const summary = useMemo(() => {
+        if (!aggregate) return null
+        if (!aggregate.count) return 'Be the first astronaut to leave a message'
+        return `${aggregate.average.toFixed(1)} ★ from ${aggregate.count} ${aggregate.count === 1 ? 'astronaut' : 'astronauts'}`
+    }, [aggregate])
+
+    // Mode AUTO_APPROVE: wish pengirim sendiri ikut dikembalikan server. Buang dari daftar
+    // supaya hanya kartu "Your wish" yang tampil. Cocokkan lewat id; cadangan: nama + pesan + rating
+    // yang sama (jaga-jaga bila id lokal berbeda dari id server).
+    const visibleItems = useMemo(() => {
+        if (!showMine) return items
+        const my = mySubmission
+        return items.filter(
+            (i) =>
+                i.id !== my.id &&
+                !(i.displayName === my.displayName && i.message === my.message && i.rating === my.rating)
+        )
+    }, [items, showMine, mySubmission])
+
+    const nothing = status === 'ready' && visibleItems.length === 0 && !showMine
+
+    return (
+        <section id="gallery" className={styles.gallery}>
+            <div className={styles.sky} aria-hidden="true">
+                {STAR_DOTS.map((d, i) => (
+                    <span
+                        key={i}
+                        className={styles.dot}
+                        style={{
+                            left: `${d.left}%`, top: `${d.top}%`,
+                            width: d.size, height: d.size,
+                            animationDelay: `${d.delay}s`, animationDuration: `${d.dur}s`,
+                        }}
+                    />
+                ))}
+            </div>
+
+            <div className={styles.inner}>
+                <div className={styles.topBar}>
+                    <button className={styles.btn} onClick={() => { sfx.close(); onBackToConstellation?.() }}>
+                        ← Back to the stars
+                    </button>
+                    {cameFromSecret && (
+                        <button className={styles.btn} onClick={() => { sfx.click(); onReturnHome?.() }}>
+                            Return home
+                        </button>
+                    )}
+                </div>
+
+                <header className={styles.head}>
+                    <p className={styles.label}>Astronaut Gallery</p>
+                    <h2 className={styles.title}>
+                        Voices <em>among the stars</em>
+                    </h2>
+                    <p className={styles.summary} aria-live="polite">{summary ?? '\u00A0'}</p>
+                </header>
+
+                <div className={styles.controls}>
+                    <div className={styles.segment} role="group" aria-label="Sort messages">
+                        {SORTS.map((s) => (
+                            <button
+                                key={s.id}
+                                className={`${styles.seg} ${sort === s.id ? styles.segOn : ''}`}
+                                aria-pressed={sort === s.id}
+                                onClick={() => pick(setSort, s.id, sort)}
+                            >
+                                {s.label}
+                            </button>
+                        ))}
+                    </div>
+                    <div className={styles.chips} role="group" aria-label="Filter by category">
+                        {[{ id: 'all', label: 'All' }, ...CATEGORIES].map((c) => (
+                            <button
+                                key={c.id}
+                                className={`${styles.chip} ${category === c.id ? styles.chipOn : ''}`}
+                                aria-pressed={category === c.id}
+                                onClick={() => pick(setCategory, c.id, category)}
+                            >
+                                {c.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {status === 'loading' && !showMine && <Skeletons />}
+
+                {status === 'error' && (
+                    <div className={styles.state} role="alert">
+                        <p>The signal got lost on its way here.</p>
+                        <button className={styles.btn} onClick={() => setRetryKey((k) => k + 1)}>Try again</button>
+                    </div>
+                )}
+
+                {nothing && (
+                    <div className={styles.state}>
+                        <p>{category === 'all'
+                            ? 'No messages among the stars yet. Yours could be the first.'
+                            : 'No messages in this corner of the sky yet.'}</p>
+                        {category !== 'all' && (
+                            <button className={styles.btn} onClick={() => pick(setCategory, 'all', category)}>Show all</button>
+                        )}
+                    </div>
+                )}
+
+                {(showMine || (status !== 'error' && visibleItems.length > 0)) && (
+                    <div className={styles.grid}>
+                        {showMine && <Card item={mySubmission} mine />}
+                        {visibleItems.map((it) => <Card key={it.id} item={it} />)}
+                    </div>
+                )}
+
+                {status === 'loading' && showMine && (
+                    <p className={styles.loadingNote} role="status">Gathering more voices…</p>
+                )}
+
+                {status === 'ready' && nextCursor && (
+                    <div className={styles.moreWrap}>
+                        <button className={styles.btn} onClick={loadMore} disabled={more === 'loading'}>
+                            {more === 'loading' ? 'Loading…' : 'Load more'}
+                        </button>
+                        {more === 'error' && (
+                            <p className={styles.moreErr} role="alert">Couldn't load more. Please try again.</p>
+                        )}
+                    </div>
+                )}
+            </div>
+        </section>
+    )
+}
+
+export default memo(Gallery)
+===== END FILE =====
+
+===== FILE: src/sections/SecretEnding.jsx =====
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { sfx } from '../hooks/useSfx.js'
+import styles from './SecretEnding.module.css'
+
+const LINE_COUNT = 4
+
+const prefersReduced = () =>
+    typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+function SecretEnding({ visitor, onVisitorChange, onStay, onGallery, onReturnHome }) {
+    const sub = visitor?.mySubmission
+    const callsign = sub?.displayName || visitor?.name || 'Traveler'
+    const isPrivate = Boolean(sub?.isPrivate)
+
+    // Sudah pernah melihat urutan ini (mis. kembali dari "Stay with my constellation")
+    // → langsung tampil lengkap, tanpa mengulang sinematiknya.
+    const seen = useRef(Boolean(visitor?.secretSeen)).current
+    const reduce = useMemo(() => prefersReduced(), [])
+
+    const lines = useMemo(() => [
+        { id: 'a', big: true, lead: 'Your wish is now a star.' },
+        {
+            id: 'b',
+            lead: 'Thank you, ',
+            name: callsign,
+            tail: ', for taking the time to cross the cosmos with this little website.',
+        },
+        {
+            id: 'c',
+            lead: isPrivate
+                ? 'Your words travelled quietly, meant only for the one who built this sky.'
+                : 'Your words will shine among the other astronauts, for anyone who passes by.',
+        },
+        {
+            id: 'd',
+            lead: 'Every light you saw tonight travelled a long way to find you. So did you.',
+        },
+    ], [callsign, isPrivate])
+
+    const [shown, setShown] = useState(seen ? LINE_COUNT : 0)
+    const [ready, setReady] = useState(seen)
+    const timers = useRef([])
+    const sectionRef = useRef(null)
+    const primaryRef = useRef(null)
+
+    // Bintang kecil pelengkap langit (posisi acak, dibuat sekali)
+    const dots = useMemo(() => Array.from({ length: reduce ? 14 : 22 }, () => ({
+        x: Math.random() * 100,
+        y: Math.random() * 100,
+        size: 1.5 + Math.random() * 1.8,
+        delay: 0.8 + Math.random() * 5,
+        dur: 2.6 + Math.random() * 2.4,
+    })), [reduce])
+
+    const clearTimers = () => {
+        timers.current.forEach(clearTimeout)
+        timers.current = []
+    }
+
+    useEffect(() => {
+        if (seen) return
+        const start = reduce ? 900 : 2400
+        const gap = reduce ? 3200 : 4800
+
+        for (let i = 0; i < LINE_COUNT; i++) {
+            timers.current.push(setTimeout(() => {
+                setShown(i + 1)
+                if (i === 0) sfx.chime(2)
+            }, start + i * gap))
+        }
+        timers.current.push(setTimeout(() => {
+            setReady(true)
+            onVisitorChange?.({ secretSeen: true })
+            sfx.chime(4)
+        }, start + (LINE_COUNT - 1) * gap + 3000))
+
+        return clearTimers
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
+    // Tombol pilihan muncul → fokus ke tombol utama, supaya pengguna keyboard tidak "kehilangan"
+    // fokus saat tombol Skip hilang. Tidak mencuri fokus jika pengguna sedang di tempat lain.
+    useEffect(() => {
+        if (!ready) return
+        const a = document.activeElement
+        if (!a || a === document.body || sectionRef.current?.contains(a)) {
+            primaryRef.current?.focus({ preventScroll: true })
+        }
+    }, [ready])
+
+    const handleSkip = () => {
+        sfx.click()
+        clearTimers()
+        setShown(LINE_COUNT)
+        setReady(true)
+        onVisitorChange?.({ secretSeen: true })
+    }
+
+    const act = (fn) => () => {
+        sfx.click()
+        fn?.()
+    }
+
+    return (
+        <section ref={sectionRef} id="secret-ending" className={styles.secret} aria-label="Thank you">
+            <div className={styles.sky} aria-hidden="true">
+                {dots.map((d, i) => (
+                    <span
+                        key={i}
+                        className={styles.dot}
+                        style={{
+                            left: `${d.x}%`,
+                            top: `${d.y}%`,
+                            width: `${d.size}px`,
+                            height: `${d.size}px`,
+                            '--d': `${d.delay}s`,
+                            '--dur': `${d.dur}s`,
+                        }}
+                    />
+                ))}
+            </div>
+
+            <div className={styles.stage}>
+                <div className={styles.inner}>
+                    <div className={`${styles.starBox} ${seen ? styles.instant : ''}`} aria-hidden="true">
+                        <div className={styles.halo} />
+                        <svg viewBox="0 0 100 100" className={styles.starSvg}>
+                            <path
+                                d="M50 4 C53 38 62 47 96 50 C62 53 53 62 50 96 C47 62 38 53 4 50 C38 47 47 38 50 4Z"
+                                fill="#fff"
+                            />
+                            <circle cx="50" cy="50" r="7" fill="#fff" />
+                        </svg>
+                    </div>
+
+                    <p className={`${styles.tag} ${seen ? styles.instant : ''}`}>
+                        ✦ {callsign}’s wish
+                    </p>
+
+                    <div className={styles.lines} aria-live="polite">
+                        {lines.slice(0, shown).map((l) => (
+                            <p
+                                key={l.id}
+                                className={`${styles.line} ${l.big ? styles.lineBig : ''} ${seen ? styles.instant : ''}`}
+                            >
+                                {l.lead}
+                                {l.name && <span className={styles.name}>{l.name}</span>}
+                                {l.tail}
+                            </p>
+                        ))}
+                    </div>
+
+                    {!ready && (
+                        <button type="button" className={styles.skip} onClick={handleSkip}>
+                            Skip ›
+                        </button>
+                    )}
+
+                    {ready && (
+                        <div className={styles.actions}>
+                            <button
+                                ref={primaryRef}
+                                type="button"
+                                className={`${styles.btn} ${styles.btnPrimary}`}
+                                style={{ '--d': '0s' }}
+                                onClick={act(onStay)}
+                            >
+                                Stay with my constellation
+                            </button>
+                            <button
+                                type="button"
+                                className={`${styles.btn} ${styles.btnSecondary}`}
+                                style={{ '--d': '0.15s' }}
+                                onClick={act(onGallery)}
+                            >
+                                View the Gallery
+                            </button>
+                            <button
+                                type="button"
+                                className={`${styles.btn} ${styles.btnGhost}`}
+                                style={{ '--d': '0.3s' }}
+                                onClick={act(onReturnHome)}
+                            >
+                                Return home
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </section>
+    )
+}
+
+export default memo(SecretEnding)
+===== END FILE =====
+
+===== FILE: src/sections/Wishing.jsx =====
+import { memo, useEffect, useId, useRef, useState } from 'react'
+import { sfx } from '../hooks/useSfx.js'
+import WishForm from '../components/WishForm.jsx'
+import styles from './Wishing.module.css'
+
+const rand = (a, b) => a + Math.random() * (b - a)
+const randInt = (a, b) => Math.floor(rand(a, b + 1))
+
+const HINT_AFTER = 20      // detik tanpa tangkapan sebelum glow bintang terang naik
+const FADE_MS = 650        // bintang biasa memudar setelah di-tap
+const BURST_MS = 1400      // ledakan cahaya bintang terang
+const BURST_MS_REDUCED = 900
+
+function Wishing({
+    visitor,
+    onVisitorChange,
+    onGallery,
+    onSubmitted,
+    onBackToConstellation,
+    onReturnHome,
+}) {
+    const uid = useId()
+    const wrapRef = useRef(null)
+    const canvasRef = useRef(null)
+    const catchRef = useRef(null)        // diisi effect canvas: tangkap bintang terang lewat tombol bantu
+    const leavingRef = useRef(false)     // true setelah Skip: abaikan onCaught yang terlambat
+    const resumeBtnRef = useRef(null)
+    const doneBtnRef = useRef(null)
+
+    // Wish sudah terkirim di perjalanan ini (mis. kembali lewat NavDots dari Secret Ending / Gallery):
+    // tidak ada permainan lagi supaya tidak terjadi kiriman ganda. Dibaca sekali saat mount.
+    const alreadyDone = useRef(Boolean(visitor?.wishSubmitted)).current
+
+    const [round, setRound] = useState(0)          // naik = main ulang (lepas bintang)
+    const [caught, setCaught] = useState(false)    // bintang terang sudah tertangkap
+    const [formOpen, setFormOpen] = useState(false)
+    const [draft, setDraft] = useState(null)       // isi form yang tersimpan saat form ditutup
+
+    // Dipanggil dari loop canvas (lewat ref agar effect tidak perlu dibuat ulang)
+    const handleCaught = () => {
+        if (leavingRef.current) return
+        setCaught(true)
+        setFormOpen(true)
+    }
+    const caughtCbRef = useRef(handleCaught)
+    caughtCbRef.current = handleCaught
+
+    useEffect(() => {
+        if (alreadyDone) return
+        const canvas = canvasRef.current
+        const wrap = wrapRef.current
+        if (!canvas || !wrap) return
+        const ctx = canvas.getContext('2d')
+        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+        // ── Ukuran canvas (DPR dibatasi 1.5 agar hemat di HP) ───────────
+        let w = 0, h = 0
+        let settled = false   // true = loop sudah berhenti (frame terakhir tampil), resize menggambar ulang
+        const resize = () => {
+            const r = wrap.getBoundingClientRect()
+            w = r.width
+            h = r.height
+            const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
+            canvas.width = Math.max(1, Math.round(w * dpr))
+            canvas.height = Math.max(1, Math.round(h * dpr))
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+            if (settled) draw()
+        }
+        resize()
+        const ro = new ResizeObserver(resize)
+        ro.observe(wrap)
+
+        // ── State permainan (semua di ref/closure, tanpa re-render) ─────
+        // Antrean: false = bintang biasa, true = bintang terang. Terang tidak pernah jadi yang pertama.
+        const total = reduce ? randInt(5, 6) : randInt(5, 10)
+        const queue = Array.from({ length: total - 1 }, () => false)
+        queue.splice(randInt(1, queue.length), 0, true)
+
+        const stars = []
+        let time = 0
+        let nextSpawn = 0.9
+        let boost = 0                 // 0..1, glow petunjuk bintang terang
+        let phase = 'play'            // 'play' | 'burst'
+        let burst = null
+        let done = false
+        const burstMs = reduce ? BURST_MS_REDUCED : BURST_MS
+
+        const spawn = (bright) => {
+            const x = rand(0.06 * w, 0.94 * w)
+            let dir = x < w / 2 ? 1 : -1            // arah ke sisi layar yang lebih lebar
+            if (!bright && Math.random() < 0.2) dir = -dir
+            const room = dir > 0 ? w * 0.97 - x : x - w * 0.03
+            let ang = bright ? rand(0.3, 0.7) : rand(0.35, 1.0)
+            if (!bright || dir === (x < w / 2 ? 1 : -1)) {
+                ang = Math.min(ang, Math.atan(Math.max(room, 40) / (h * 0.75)))
+            }
+            ang = Math.max(ang, 0.18)
+            const base = Math.min(Math.max(h, 360), 900)
+            const speed = (bright ? rand(0.15, 0.19) : rand(0.16, 0.26)) * base * (reduce ? 0.6 : 1)
+            stars.push({
+                x,
+                y: rand(-30, -10),
+                vx: dir * Math.sin(ang) * speed,
+                vy: Math.cos(ang) * speed,
+                bright,
+                r: bright ? 4.6 : rand(1.6, 2.6),
+                tail: bright ? rand(190, 230) : rand(60, 120),
+                state: 'fall',          // fall | fade | caught
+                t: 0,
+                rx: 0, ry: 0,           // posisi riak saat di-tap
+                phase: rand(0, Math.PI * 2),
+            })
+        }
+
+        const requeueBright = () => {
+            if (phase !== 'play') return
+            queue.splice(randInt(0, Math.min(1, queue.length)), 0, true)
+            if (Math.random() < 0.6) queue.unshift(false)   // selingan bintang biasa
+            nextSpawn = Math.min(nextSpawn, 1.0)
+        }
+
+        // Bintang terang tertangkap (lewat tap, atau lewat tombol bantu dengan hit = null / bintang di layar)
+        const catchBright = (hit) => {
+            phase = 'burst'
+            if (hit) { hit.state = 'caught'; hit.t = 0 }
+            burst = { x: hit ? hit.x : w / 2, y: hit ? hit.y : h * 0.35, t: 0 }
+            stars.forEach((s) => {
+                if (s !== hit && s.state === 'fall') {
+                    s.state = 'fade'; s.t = 0; s.rx = s.x; s.ry = s.y
+                    s.vx *= 0.3; s.vy *= 0.3
+                }
+            })
+            sfx.reveal()
+            sfx.chime(4)
+        }
+
+        // Jalur keyboard / screen reader
+        catchRef.current = () => {
+            if (phase !== 'play') return
+            catchBright(stars.find((s) => s.bright && s.state === 'fall') || null)
+        }
+
+        // ── Interaksi: hitbox ≥ 48px (radius 26 / 34), mencakup sedikit ekor ──
+        const onPointerDown = (e) => {
+            if (phase !== 'play') return
+            const rect = canvas.getBoundingClientRect()
+            const px = e.clientX - rect.left
+            const py = e.clientY - rect.top
+
+            let hit = null
+            let best = Infinity
+            for (const s of stars) {
+                if (s.state !== 'fall') continue
+                const R = s.bright ? 34 : 26
+                const len = Math.hypot(s.vx, s.vy) || 1
+                const ax = s.x, ay = s.y
+                const bx = s.x - (s.vx / len) * 30
+                const by = s.y - (s.vy / len) * 30
+                const abx = bx - ax, aby = by - ay
+                let t = ((px - ax) * abx + (py - ay) * aby) / (abx * abx + aby * aby)
+                t = Math.max(0, Math.min(1, t))
+                const d = Math.hypot(px - (ax + abx * t), py - (ay + aby * t))
+                if (d <= R) {
+                    const score = s.bright ? d - 100 : d   // bintang terang diprioritaskan
+                    if (score < best) { best = score; hit = s }
+                }
+            }
+            if (!hit) return
+            e.preventDefault()
+
+            if (hit.bright) {
+                catchBright(hit)
+            } else {
+                hit.state = 'fade'
+                hit.t = 0
+                hit.rx = hit.x
+                hit.ry = hit.y
+                hit.vx *= 0.3
+                hit.vy *= 0.3
+                sfx.click()
+            }
+        }
+        canvas.addEventListener('pointerdown', onPointerDown, { passive: false })
+
+        // ── Update ──────────────────────────────────────────────────────
+        const update = (dt) => {
+            time += dt
+
+            if (phase === 'play') {
+                if (time > HINT_AFTER) boost = Math.min(1, (time - HINT_AFTER) / 4)
+
+                nextSpawn -= dt
+                if (nextSpawn <= 0 && queue.length) {
+                    spawn(queue.shift())
+                    nextSpawn = rand(1.2, 2.8) * (reduce ? 1.4 : 1)
+                }
+            } else if (burst) {
+                burst.t = Math.min(burst.t + dt * 1000, burstMs)
+                if (burst.t >= burstMs && !done) {
+                    done = true
+                    caughtCbRef.current()
+                }
+            }
+
+            for (let i = stars.length - 1; i >= 0; i--) {
+                const s = stars[i]
+                s.t += dt * 1000
+                if (s.state === 'caught') continue
+                s.x += s.vx * dt
+                s.y += s.vy * dt
+                if (s.state === 'fade') {
+                    if (s.t >= FADE_MS) stars.splice(i, 1)
+                    continue
+                }
+                const len = Math.hypot(s.vx, s.vy) || 1
+                const tx = s.x - (s.vx / len) * s.tail
+                const ty = s.y - (s.vy / len) * s.tail
+                const gone = ty > h + 10 || (s.vx > 0 && tx > w + 10) || (s.vx < 0 && tx < -10)
+                if (gone) {
+                    stars.splice(i, 1)
+                    if (s.bright) requeueBright()   // bintang terang lolos → muncul lagi
+                }
+            }
+        }
+
+        // ── Gambar ──────────────────────────────────────────────────────
+        const drawStar = (s) => {
+            if (s.state === 'caught') return
+            const len = Math.hypot(s.vx, s.vy) || 1
+            const ux = s.vx / len, uy = s.vy / len
+            const alpha = s.state === 'fade' ? Math.max(0, 1 - s.t / FADE_MS) : 1
+
+            ctx.globalAlpha = alpha
+
+            // ekor gradasi
+            const tx = s.x - ux * s.tail
+            const ty = s.y - uy * s.tail
+            const g = ctx.createLinearGradient(tx, ty, s.x, s.y)
+            g.addColorStop(0, 'rgba(170,200,255,0)')
+            g.addColorStop(1, `rgba(235,243,255,${s.bright ? 0.95 : 0.8})`)
+            ctx.strokeStyle = g
+            ctx.lineWidth = s.bright ? 2.6 : 1.3
+            ctx.lineCap = 'round'
+            ctx.beginPath()
+            ctx.moveTo(tx, ty)
+            ctx.lineTo(s.x, s.y)
+            ctx.stroke()
+
+            // halo (bintang terang berdenyut halus; naik saat petunjuk)
+            let R, A
+            if (s.bright) {
+                const pulse = reduce ? 0.5 : 0.5 + 0.5 * Math.sin(time * 2.4 + s.phase)
+                R = 24 + pulse * 8 + boost * 10
+                A = 0.22 + pulse * 0.12 + boost * 0.35
+            } else {
+                R = s.r * 5
+                A = 0.4
+            }
+            const hg = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, R)
+            hg.addColorStop(0, `rgba(225,236,255,${Math.min(1, A * 2)})`)
+            hg.addColorStop(0.35, `rgba(160,190,255,${A})`)
+            hg.addColorStop(1, 'rgba(120,150,255,0)')
+            ctx.fillStyle = hg
+            ctx.beginPath()
+            ctx.arc(s.x, s.y, R, 0, Math.PI * 2)
+            ctx.fill()
+
+            ctx.fillStyle = '#fff'
+            ctx.beginPath()
+            ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2)
+            ctx.fill()
+
+            ctx.globalAlpha = 1
+
+            // riak kecil saat bintang biasa di-tap
+            if (s.state === 'fade') {
+                const p = Math.min(1, s.t / FADE_MS)
+                ctx.strokeStyle = `rgba(170,200,255,${0.5 * (1 - p)})`
+                ctx.lineWidth = 1.2
+                ctx.beginPath()
+                ctx.arc(s.rx, s.ry, 6 + 34 * p, 0, Math.PI * 2)
+                ctx.stroke()
+            }
+        }
+
+        const drawBurst = () => {
+            const p = burst.t / burstMs
+            const e = 1 - Math.pow(1 - p, 3)               // ease-out
+            const diag = Math.hypot(w, h)
+            const A = p < 0.5 ? p * 2 : 1 - (p - 0.5) * 0.9 // naik cepat, mengendap ke ~0.55
+            const R = 20 + e * diag * 0.6
+
+            const g = ctx.createRadialGradient(burst.x, burst.y, 0, burst.x, burst.y, R)
+            g.addColorStop(0, `rgba(255,255,255,${A})`)
+            g.addColorStop(0.25, `rgba(205,222,255,${A * 0.8})`)
+            g.addColorStop(1, 'rgba(120,150,255,0)')
+            ctx.fillStyle = g
+            ctx.fillRect(0, 0, w, h)
+
+            // inti bintang membesar
+            ctx.fillStyle = `rgba(255,255,255,${Math.min(1, 0.4 + p)})`
+            ctx.beginPath()
+            ctx.arc(burst.x, burst.y, 5 + e * 38, 0, Math.PI * 2)
+            ctx.fill()
+
+            // gelombang kejut (dilewati saat reduced motion)
+            if (!reduce) {
+                ctx.strokeStyle = `rgba(190,210,255,${Math.max(0, 0.7 * (1 - p))})`
+                ctx.lineWidth = 2
+                ctx.beginPath()
+                ctx.arc(burst.x, burst.y, e * Math.min(w, h) * 0.55, 0, Math.PI * 2)
+                ctx.stroke()
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, w, h)
+            ctx.save()
+            if (burst && !reduce && burst.t < 350) {      // getaran singkat, tanpa saat reduced motion
+                const k = 3 * (1 - burst.t / 350)
+                ctx.translate((Math.random() - 0.5) * k, (Math.random() - 0.5) * k)
+            }
+            stars.forEach(drawStar)
+            if (burst) drawBurst()
+            ctx.restore()
+        }
+
+        let raf = 0
+        let last = performance.now()
+        const frame = (now) => {
+            const dt = Math.min((now - last) / 1000, 0.05)
+            last = now
+            update(dt)
+            draw()
+            // Setelah ledakan selesai hanya bintang tertangkap yang tersisa: tidak ada yang bergerak lagi.
+            // Hentikan loop agar HP tidak menggambar ulang 60fps di belakang form (backdrop blur).
+            if (done && stars.every((s) => s.state === 'caught')) {
+                settled = true
+                raf = 0
+                return
+            }
+            raf = requestAnimationFrame(frame)
+        }
+        raf = requestAnimationFrame(frame)
+
+        return () => {
+            cancelAnimationFrame(raf)
+            canvas.removeEventListener('pointerdown', onPointerDown)
+            ro.disconnect()
+            catchRef.current = null
+        }
+    }, [round, alreadyDone])
+
+    // Fokus: panel "sudah jadi bintang" saat mount; kartu resume saat form ditutup
+    useEffect(() => {
+        if (alreadyDone) doneBtnRef.current?.focus({ preventScroll: true })
+    }, [alreadyDone])
+
+    useEffect(() => {
+        if (caught && !formOpen) resumeBtnRef.current?.focus({ preventScroll: true })
+    }, [caught, formOpen])
+
+    const handleSkip = () => {
+        sfx.click()
+        leavingRef.current = true
+        onVisitorChange?.({ skipped: true })   // flag: skip TIDAK membuka Secret Ending
+        onGallery?.()
+    }
+
+    // Form ditutup tanpa kirim: simpan isi form, tawarkan buka lagi / lepas bintang
+    const handleFormClose = (savedDraft) => {
+        setDraft(savedDraft)
+        setFormOpen(false)
+    }
+
+    // Kiriman sukses: simpan ke state App (mySubmission)
+    const handleSaved = (record) => {
+        onVisitorChange?.({ mySubmission: record, wishSubmitted: true, skipped: false })
+    }
+
+    // Animasi bintang naik selesai → Secret Ending
+    const handleDone = () => {
+        onSubmitted?.()
+    }
+
+    const handleRelease = () => {
+        sfx.click()
+        setFormOpen(false)
+        setCaught(false)
+        setRound((r) => r + 1)
+    }
+
+    const handleReopen = () => {
+        sfx.open()
+        setFormOpen(true)
+    }
+
+    const act = (fn) => () => {
+        sfx.click()
+        leavingRef.current = true
+        fn?.()
+    }
+
+    // ── Wish sudah terkirim: tidak ada permainan, hanya pilihan lanjut ──
+    if (alreadyDone) {
+        return (
+            <section id="wishing" className={styles.wishing}>
+                <div className={styles.resume} role="region" aria-labelledby={`${uid}-done`}>
+                    <div className={styles.card}>
+                        <p className={styles.cardStar} aria-hidden="true">✦</p>
+                        <p id={`${uid}-done`} className={styles.cardTitle}>Your wish is already a star</p>
+                        <p className={styles.cardText}>
+                            One wish for each journey keeps every star special.
+                            Return home whenever you wish to begin a new one.
+                        </p>
+                        <div className={styles.cardActions}>
+                            <button ref={doneBtnRef} className={styles.cardBtn} onClick={act(onBackToConstellation)}>
+                                Stay with my constellation
+                            </button>
+                            <button className={styles.cardBtn} onClick={act(onGallery)}>
+                                View the Gallery
+                            </button>
+                            <button className={styles.cardBtn} onClick={act(onReturnHome)}>
+                                Return home
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        )
+    }
+
+    return (
+        <section id="wishing" className={styles.wishing}>
+            <div ref={wrapRef} className={styles.sky}>
+                <canvas
+                    ref={canvasRef}
+                    className={styles.canvas}
+                    role="img"
+                    aria-label="Night sky with falling stars. Tap the brightest one to make a wish."
+                />
+            </div>
+
+            {/* Jalur keyboard / screen reader: terlihat hanya saat difokus */}
+            {!caught && (
+                <button type="button" className={styles.assist} onClick={() => catchRef.current?.()}>
+                    Catch the brightest star
+                </button>
+            )}
+
+            <div className={styles.caption}>
+                <p className={styles.label}>Wishing Star</p>
+                <h2 className={styles.title}>
+                    Make <em>a wish</em>
+                </h2>
+                <p className={styles.hint}>Find the brightest falling star</p>
+            </div>
+
+            <button className={styles.skip} onClick={handleSkip}>
+                Skip to gallery
+            </button>
+
+            {/* Form ditutup setelah bintang tertangkap: bisa dibuka lagi atau bintang dilepas */}
+            {caught && !formOpen && (
+                <div className={styles.resume}>
+                    <div
+                        className={styles.card}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby={`${uid}-resume`}
+                    >
+                        <p className={styles.cardStar} aria-hidden="true">✦</p>
+                        <p id={`${uid}-resume`} className={styles.cardTitle}>Your star is still glowing</p>
+                        <p className={styles.cardText}>
+                            {draft?.message?.trim()
+                                ? 'Your words are safe. Pick up where you left off.'
+                                : 'Whisper your wish whenever you are ready.'}
+                        </p>
+                        <div className={styles.cardActions}>
+                            <button ref={resumeBtnRef} className={styles.cardBtn} onClick={handleReopen}>
+                                Continue my wish
+                            </button>
+                            <button className={styles.cardBtn} onClick={handleRelease}>
+                                Release the star
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {formOpen && (
+                <WishForm
+                    initialDraft={draft}
+                    onClose={handleFormClose}
+                    onSaved={handleSaved}
+                    onDone={handleDone}
+                />
+            )}
+        </section>
+    )
+}
+
+export default memo(Wishing)
+===== END FILE =====
+
+===== FILE: src/services/wishes.js =====
+// ============================================================
+// COSMIC JOURNEY — Wishes service (Fase 6: backend nyata)
+// submitWish → POST /api/submit-wish, getWishes → GET /api/get-wishes
+// Kontrak fungsi SAMA dengan versi dummy (Fase 2 & 4); UI tidak berubah.
+// Tidak ada service key di sini: semua rahasia hanya ada di Netlify Functions.
+// ============================================================
+
+export const MESSAGE_MIN = 5
+export const MESSAGE_MAX = 280
+export const NAME_MAX = 30
+export const PAGE_SIZE = 12
+
+// id = nilai yang dikirim ke backend (whitelist server-side di netlify/lib/shared.js)
+export const CATEGORIES = [
+    { id: 'feedback', label: 'Feedback' },
+    { id: 'suggestion', label: 'Suggestion' },
+    { id: 'developer', label: 'About the developer' },
+    { id: 'wish', label: 'Just a wish' },
+]
+const CATEGORY_IDS = new Set(CATEGORIES.map((c) => c.id))
+
+const API_BASE = '/api'
+const SUBMIT_TIMEOUT = 15000
+const GET_TIMEOUT = 10000
+const ERROR_CODES = new Set(['validation', 'rate_limit', 'network', 'server'])
+
+// ── Callsign anonim: dibuat sekali per sesi (mis. "Astronaut-7F2") ──
+const CALLSIGN_CHARS = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ' // tanpa 0/O/1/I agar tidak membingungkan
+let sessionCallsign = null
+
+export function getSessionCallsign() {
+    if (sessionCallsign) return sessionCallsign
+    const buf = new Uint32Array(3)
+    if (typeof window !== 'undefined' && window.crypto?.getRandomValues) {
+        window.crypto.getRandomValues(buf)
+    } else {
+        for (let i = 0; i < buf.length; i++) buf[i] = Math.floor(Math.random() * 4294967296)
+    }
+    const code = Array.from(buf, (n) => CALLSIGN_CHARS[n % CALLSIGN_CHARS.length]).join('')
+    sessionCallsign = `Astronaut-${code}`
+    return sessionCallsign
+}
+
+// Dipanggil saat pengunjung "pulang ke Bumi" (perjalanan baru = pengunjung baru)
+export function resetSessionCallsign() {
+    sessionCallsign = null
+}
+
+// ── Pembersihan teks (server melakukan hal yang sama dan tetap menjadi penentu) ──
+const cleanName = (s) =>
+    String(s ?? '').replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ').replace(/\s+/g, ' ').trim()
+
+const cleanMessage = (s) =>
+    String(s ?? '')
+        .replace(/\r\n?/g, '\n')
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+
+const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+
+function fail(code, message) {
+    const err = new Error(message)
+    err.code = code
+    return err
+}
+
+// ── Pemanggil HTTP: semua kegagalan diubah menjadi Error ber-.code ──
+async function request(path, { method = 'GET', body, timeout }) {
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), timeout)
+    try {
+        let res
+        try {
+            res = await fetch(`${API_BASE}/${path}`, {
+                method,
+                headers: body ? { 'Content-Type': 'application/json' } : undefined,
+                body: body ? JSON.stringify(body) : undefined,
+                signal: ctrl.signal,
+            })
+        } catch (_) {
+            // offline, DNS, timeout, atau diblokir
+            throw fail('network', 'Could not reach the observatory.')
+        }
+
+        // Bila backend mati / /api tidak ada, server bisa membalas HTML (bukan JSON) → data = null
+        let data = null
+        try { data = await res.json() } catch (_) { /* bukan JSON */ }
+
+        if (!res.ok) {
+            const e = data?.error
+            if (e && ERROR_CODES.has(e.code)) {
+                throw fail(e.code, typeof e.message === 'string' ? e.message : 'Something went wrong.')
+            }
+            throw fail(res.status === 429 ? 'rate_limit' : 'server', 'The observatory is quiet right now.')
+        }
+        if (!data || typeof data !== 'object') {
+            throw fail('server', 'The observatory is quiet right now.')
+        }
+        return data
+    } finally {
+        clearTimeout(timer)
+    }
+}
+
+/**
+ * Kontrak (sama seperti sebelumnya):
+ *   submitWish({ displayName, isAnonymous, category, message, rating, isPrivate, consent, website })
+ *   → Promise<record>  atau throw Error dengan .code: 'validation' | 'rate_limit' | 'network' | 'server'
+ *   record = { id, displayName, isAnonymous, category, message, rating, isPrivate, createdAt, status }
+ * `website` = field honeypot (harus kosong; server membalas sukses palsu tanpa menyimpan bila terisi).
+ * POST TIDAK di-retry otomatis agar tidak terjadi kiriman ganda.
+ */
+export async function submitWish(payload) {
+    // Pemeriksaan cepat di klien (server tetap memvalidasi ulang secara ketat)
+    const message = cleanMessage(payload?.message)
+    const rating = Number(payload?.rating)
+    const isPrivate = Boolean(payload?.isPrivate)
+
+    if (message.length < MESSAGE_MIN || message.length > MESSAGE_MAX) {
+        throw fail('validation', `Your message needs ${MESSAGE_MIN}–${MESSAGE_MAX} characters.`)
+    }
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+        throw fail('validation', 'Please choose a rating from 1 to 5 stars.')
+    }
+    if (!CATEGORY_IDS.has(payload?.category)) {
+        throw fail('validation', 'Please choose a category.')
+    }
+    if (!isPrivate && !payload?.consent) {
+        throw fail('validation', 'Please agree to show your message in the Gallery, or send it privately.')
+    }
+
+    const isAnonymous = Boolean(payload?.isAnonymous)
+    const displayName = cleanName(payload?.displayName).slice(0, NAME_MAX) || getSessionCallsign()
+
+    const record = await request('submit-wish', {
+        method: 'POST',
+        timeout: SUBMIT_TIMEOUT,
+        body: {
+            displayName,
+            isAnonymous,
+            category: payload.category,
+            message,
+            rating,
+            isPrivate,
+            consent: Boolean(payload?.consent),
+            website: typeof payload?.website === 'string' ? payload.website : '',
+        },
+    })
+
+    if (!record.id || typeof record.message !== 'string') {
+        throw fail('server', 'The observatory is quiet right now.')
+    }
+    return record
+}
+
+/**
+ * Kontrak (sama seperti sebelumnya):
+ *   getWishes({ sort = 'newest' | 'rating', category = 'all' | <id kategori>, cursor = null, limit = 12 })
+ *   → Promise<{
+ *        items: [{ id, displayName, isAnonymous, category, message, rating, createdAt }],
+ *        nextCursor: string | null,     // opaque: kirim balik apa adanya; null = sudah habis
+ *        total: number,                 // jumlah item yang cocok dengan filter kategori
+ *        aggregate: { average: number, count: number }  // semua wish publik, TIDAK terpengaruh filter
+ *     }>
+ *   atau throw Error dengan .code: 'validation' | 'network' | 'server'
+ * GET aman di-retry: satu kali ulang bila jaringan gagal.
+ */
+export async function getWishes({ sort = 'newest', category = 'all', cursor = null, limit = PAGE_SIZE } = {}) {
+    if (sort !== 'newest' && sort !== 'rating') throw fail('validation', 'Unknown sort.')
+    if (category !== 'all' && !CATEGORY_IDS.has(category)) throw fail('validation', 'Unknown category.')
+    const pageSize = Math.min(50, Math.max(1, Math.floor(Number(limit)) || PAGE_SIZE))
+
+    const q = new URLSearchParams({ sort, category, limit: String(pageSize) })
+    if (cursor) q.set('cursor', String(cursor))
+    const path = `get-wishes?${q}`
+
+    let data
+    try {
+        data = await request(path, { timeout: GET_TIMEOUT })
+    } catch (err) {
+        if (err.code !== 'network') throw err
+        await wait(700)
+        data = await request(path, { timeout: GET_TIMEOUT })
+    }
+
+    if (!Array.isArray(data.items) || !data.aggregate) {
+        throw fail('server', 'The observatory is quiet right now.')
+    }
+    return {
+        items: data.items,
+        nextCursor: typeof data.nextCursor === 'string' ? data.nextCursor : null,
+        total: Number(data.total) || 0,
+        aggregate: {
+            count: Number(data.aggregate.count) || 0,
+            average: Number(data.aggregate.average) || 0,
+        },
+    }
+}
+===== END FILE =====

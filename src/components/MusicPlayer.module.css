@@ -1,271 +1,623 @@
-/* ── Wrapper ──────────────────────────────────────────────── */
-.player {
+/* ═══════════════════════════════════════════════════════════
+   COSMIC MUSIC PLAYER — Lofi Dreamy
+   Fase 12: mode mini (default di HP), dock tersembunyi, tombol Comfort.
+
+   PENTING: rule body.hide-global-ui (index.css) memilih lewat potongan nama:
+   div[class*="player"] dan button[class*="showBtn"]. Container luar HARUS tetap
+   memuat kata "player" (player, playerMini, playerDock) dan tombol ♫ tetap "showBtn".
+   Jangan menamai class lain dengan kata "player".
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Dock (saat disembunyikan): ♫ + Comfort ───────────────── */
+.playerDock {
   position: fixed;
-  top: 1.25rem;
-  right: 1.25rem;
+  top: 1.2rem;
+  right: 1.2rem;
   z-index: 200;
   display: flex;
   align-items: center;
-  gap: 0;
-  background: rgba(6, 6, 22, 0.55);
-  border: 1px solid rgba(80, 100, 160, 0.2);
-  border-radius: 50px;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: 0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04);
-  transition: all 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
-  overflow: hidden;
-  width: 46px;
-  height: 46px;
-  cursor: default;
+  gap: 8px;
 }
 
-.player.expanded {
-  width: 260px;
-  border-radius: 16px;
-  border-color: rgba(100, 130, 220, 0.3);
-  box-shadow: 0 8px 40px rgba(0,0,0,0.45), 0 0 20px rgba(68,102,255,0.08), inset 0 1px 0 rgba(255,255,255,0.06);
-}
-
-.player.playing {
-  border-color: rgba(100, 130, 220, 0.35);
-}
-
-/* ── Album art circle ─────────────────────────────────────── */
-.albumArt {
-  position: relative;
-  flex-shrink: 0;
-  width: 46px;
-  height: 46px;
+.showBtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(8, 8, 28, 0.8);
+  border: 1px solid rgba(130, 150, 220, 0.4);
+  color: var(--accent-blue-text);
+  font-size: 1rem;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  backdrop-filter: blur(12px);
+  transition: all 0.3s;
+  padding: 0;
+  touch-action: manipulation;
 }
 
-.artInner {
-  width: 30px;
-  height: 30px;
+.showBtn:hover {
+  border-color: rgba(140, 170, 255, 0.7);
+  color: var(--text-primary);
+  transform: scale(1.1);
+}
+
+/* ── Tombol Comfort (dipakai di dock, mini, dan panel penuh) ── */
+.comfortBtn {
+  position: relative;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #1a2855, #0a1030);
-  border: 1px solid rgba(100, 130, 220, 0.3);
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #7799ee;
-  transition: all 0.3s;
-  z-index: 2;
-  position: relative;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(130, 150, 220, 0.35);
+  color: var(--accent-blue-text);
+  cursor: pointer;
+  transition: background 0.25s, border-color 0.25s, color 0.25s, box-shadow 0.25s;
+  touch-action: manipulation;
 }
 
-.albumArt:hover .artInner {
-  border-color: rgba(130, 170, 255, 0.6);
-  color: #aabbff;
-  box-shadow: 0 0 12px rgba(80, 120, 255, 0.3);
-}
-
-/* Spinning ring */
-.spinRing {
+/* Area sentuh sedikit lebih besar dari tampilan */
+.comfortBtn::before {
+  content: '';
   position: absolute;
-  inset: 4px;
+  inset: -4px;
   border-radius: 50%;
-  border: 1px dashed rgba(80, 110, 200, 0.3);
+}
+
+.comfortBtn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(150, 180, 255, 0.6);
+  color: var(--text-primary);
+}
+
+.comfortOn {
+  background: rgba(153, 187, 255, 0.22);
+  border-color: rgba(170, 200, 255, 0.85);
+  color: var(--text-primary);
+  box-shadow: 0 0 12px rgba(120, 160, 255, 0.35);
+}
+
+/* ── Mini: pill ringkas di kanan atas ─────────────────────── */
+.playerMini {
+  position: fixed;
+  top: 1.2rem;
+  right: 1.2rem;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-radius: 999px;
+  background: rgba(5, 5, 20, 0.82);
+  border: 1px solid rgba(80, 100, 180, 0.3);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  transition: border-color 0.35s ease, box-shadow 0.35s ease;
+}
+
+.playerMini.miniOn {
+  border-color: rgba(110, 140, 230, 0.45);
+  box-shadow:
+    0 6px 24px rgba(0, 0, 0, 0.45),
+    0 0 14px color-mix(in srgb, var(--glow, #4466ff) 35%, transparent);
+}
+
+.miniPlay {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: rgba(80, 110, 200, 0.2);
+  border: 1px solid rgba(100, 140, 220, 0.45);
+  color: var(--accent-blue-text);
+  cursor: pointer;
+  transition: background 0.25s, color 0.25s, box-shadow 0.25s;
+  touch-action: manipulation;
+}
+
+.miniPlay:hover {
+  background: rgba(100, 140, 255, 0.28);
+  color: var(--text-primary);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--btn-col, #4466ff) 50%, transparent);
+}
+
+.miniBtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+  touch-action: manipulation;
+}
+
+.miniBtn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.miniVol {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+  color: var(--text-muted);
+}
+
+/* Slider mini: elemen tinggi 28px (area sentuh), track 4px digambar lewat pseudo-element */
+.miniSlider {
+  width: 64px;
+  height: 28px;
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+  touch-action: pan-x;
+}
+
+.miniSlider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right,
+      var(--c1, #4466ff) var(--vol, 50%),
+      rgba(255, 255, 255, 0.2) var(--vol, 50%));
+}
+
+.miniSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: #aabbff;
+  box-shadow: 0 0 6px rgba(100, 140, 220, 0.6);
+}
+
+.miniSlider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.miniSlider::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--c1, #4466ff);
+}
+
+.miniSlider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: #aabbff;
+  box-shadow: 0 0 6px rgba(100, 140, 220, 0.6);
+}
+
+.miniSlider:focus-visible {
+  outline: 2px solid #aaccff;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* ── Main player (panel penuh) ────────────────────────────── */
+.player {
+  position: fixed;
+  top: 1.2rem;
+  right: 1.2rem;
+  z-index: 200;
+  width: 270px;
+  padding: 14px;
+
+  background: rgba(5, 5, 20, 0.8);
+  border: 1px solid rgba(80, 100, 180, 0.28);
+  border-radius: 20px;
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.5),
+    0 0 0px transparent,
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+  transition: box-shadow 0.25s ease, border-color 0.35s ease, transform 0.1s ease;
+}
+
+.player.playing {
+  border-color: rgba(100, 130, 220, 0.3);
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.55),
+    0 0 calc(8px + calc(var(--glow-int, 0) * 28px)) var(--glow, #4466ff),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.player.beat {
+  transform: scale(1.012);
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.55),
+    0 0 44px var(--glow, #4466ff),
+    0 0 88px color-mix(in srgb, var(--glow, #4466ff) 40%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* ── Tombol kecil di pojok panel: minimize dan close ──────── */
+.closeBtn,
+.collapseBtn {
+  position: absolute;
+  top: 8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+  padding: 0;
+  touch-action: manipulation;
+}
+
+/* Area sentuh diperluas tanpa mengubah ukuran tampilan */
+.closeBtn::before,
+.collapseBtn::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+}
+
+.closeBtn {
+  right: 10px;
+}
+
+.collapseBtn {
+  right: 38px;
+}
+
+.closeBtn:hover,
+.collapseBtn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ── Top row: art + info ──────────────────────────────────── */
+.topRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+/* ── Art canvas wrap ──────────────────────────────────────── */
+.artWrap {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  overflow: hidden;
+  flex-shrink: 0;
+  cursor: pointer;
+  border: 1px solid rgba(100, 130, 200, 0.2);
   transition: border-color 0.3s;
 }
 
-.spinRing.spinning {
-  animation: spinRing 8s linear infinite;
-  border-color: rgba(100, 140, 255, 0.5);
+.artWrap:hover {
+  border-color: rgba(140, 180, 255, 0.45);
 }
 
-@keyframes spinRing {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+.artCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
-.playIcon {
-  margin-left: 2px;
-}
-
-/* ── Visualizer bars ──────────────────────────────────────── */
-.visualizer {
+.artOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
   display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  height: 14px;
-}
-
-.vizBar {
-  width: 2.5px;
-  border-radius: 2px;
-  background: #7799ee;
-  animation: vizAnim 0.7s ease-in-out infinite alternate;
-  animation-delay: calc(var(--i) * 0.12s);
-}
-
-.vizBar:nth-child(1) { height: 5px; }
-.vizBar:nth-child(2) { height: 12px; }
-.vizBar:nth-child(3) { height: 8px; }
-.vizBar:nth-child(4) { height: 14px; }
-.vizBar:nth-child(5) { height: 6px; }
-
-@keyframes vizAnim {
-  from { transform: scaleY(0.3); opacity: 0.6; }
-  to   { transform: scaleY(1);   opacity: 1; }
-}
-
-/* ── Track info ───────────────────────────────────────────── */
-.trackInfo {
-  flex: 1;
-  min-width: 0;
-  padding: 0 0 0 2px;
+  align-items: center;
+  justify-content: center;
   opacity: 0;
-  transform: translateX(-6px);
-  transition: opacity 0.35s ease, transform 0.35s ease;
+  transition: opacity 0.2s;
+}
+
+.artWrap:hover .artOverlay {
+  opacity: 1;
+}
+
+.beatRing {
+  position: absolute;
+  inset: -3px;
+  border-radius: 14px;
+  border: 2px solid;
+  opacity: 0.9;
+  animation: beatRingAnim 0.15s ease-out forwards;
   pointer-events: none;
 }
 
-.player.expanded .trackInfo {
-  opacity: 1;
-  transform: translateX(0);
-  pointer-events: all;
+@keyframes beatRingAnim {
+  from {
+    inset: 0;
+    opacity: 0.9;
+  }
+
+  to {
+    inset: -8px;
+    opacity: 0;
+    border-radius: 18px;
+  }
 }
 
-.trackScroll {
+/* ── Track meta ───────────────────────────────────────────── */
+.trackMeta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-right: 44px;
+  /* ruang untuk tombol minimize + close */
+}
+
+.trackNameWrap {
   overflow: hidden;
   white-space: nowrap;
-  margin-bottom: 1px;
 }
 
-.trackTitle {
+.trackName {
   display: inline-block;
-  font-family: 'Outfit', system-ui, sans-serif;
-  font-size: 0.82rem;
-  font-weight: 400;
-  color: #c8d8ff;
-  letter-spacing: 0.03em;
-  transition: opacity 0.35s ease, transform 0.35s ease;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  font-weight: var(--fw-medium);
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+  transition: opacity 0.28s, transform 0.28s;
 }
 
-.slideOut {
+.fadeOut {
   opacity: 0;
-  transform: translateY(-8px);
+  transform: translateY(-6px);
 }
 
-.slideIn {
+.fadeIn {
   opacity: 1;
   transform: translateY(0);
 }
 
 .trackArtist {
-  display: block;
-  font-family: 'Outfit', system-ui, sans-serif;
-  font-size: 0.68rem;
-  color: #4a6080;
-  letter-spacing: 0.08em;
-  margin-bottom: 5px;
-}
-
-/* Mini progress bar */
-.progressWrap {
-  height: 2px;
-  background: rgba(255,255,255,0.06);
-  border-radius: 2px;
+  font-family: var(--font-body);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-regular);
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lofiBadge {
+  font-family: var(--font-body);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-regular);
+  letter-spacing: 0.1em;
+  border: 1px solid;
+  border-radius: 4px;
+  padding: 1px 6px;
+  width: fit-content;
+  opacity: 0.9;
+}
+
+/* ── Bar visualizer ───────────────────────────────────────── */
+.vizWrap {
+  margin: 0 0 8px;
+  height: 32px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.barCanvas {
+  display: block;
   width: 100%;
-}
-
-.progressBar {
   height: 100%;
-  width: 0%;
-  background: linear-gradient(90deg, #4466ff, #8844ff);
-  border-radius: 2px;
 }
 
-.progressBar.progPlaying {
-  animation: progressLoop 30s linear infinite;
-}
-
-@keyframes progressLoop {
-  from { width: 0%; }
-  to   { width: 100%; }
-}
-
-/* ── Controls ─────────────────────────────────────────────── */
-.controls {
+/* ── Progress ─────────────────────────────────────────────── */
+.progressArea {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 8px 10px 8px 4px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.3s ease;
-  flex-shrink: 0;
+  gap: 7px;
+  margin-bottom: 10px;
 }
 
-.player.expanded .controls {
-  opacity: 1;
-  pointer-events: all;
+.timeLabel {
+  font-family: var(--font-body);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-regular);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 32px;
+  text-align: center;
 }
 
-.controlBtn {
-  width: 26px;
-  height: 26px;
+.progressTrack {
+  flex: 1;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  position: relative;
+  transition: height 0.2s;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.25s linear;
+}
+
+/* ── Controls row ─────────────────────────────────────────── */
+.controlsRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.playBtn {
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(100, 130, 200, 0.2);
-  color: #7799cc;
+  flex-shrink: 0;
+  background: rgba(80, 110, 200, 0.18);
+  border: 1px solid rgba(100, 140, 220, 0.4);
+  color: var(--accent-blue-text);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.25s;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
   padding: 0;
+  touch-action: manipulation;
 }
 
-.controlBtn:hover {
-  background: rgba(80, 110, 200, 0.2);
-  border-color: rgba(130, 160, 255, 0.4);
-  color: #aabbff;
-  transform: scale(1.1);
+.playBtn:hover {
+  background: rgba(100, 140, 255, 0.25);
+  border-color: rgba(140, 180, 255, 0.6);
+  color: var(--text-primary);
+  transform: scale(1.12);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--btn-col, #4466ff) 50%, transparent);
 }
 
-/* Volume row */
-.volumeGroup {
+.player.beat .playBtn {
+  box-shadow: 0 0 22px var(--btn-col, #4466ff);
+}
+
+/* ── Volume ───────────────────────────────────────────────── */
+.volRow {
   display: flex;
   align-items: center;
-  gap: 5px;
-  color: #445566;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  color: var(--text-muted);
 }
 
 .volSlider {
-  width: 52px;
+  flex: 1;
+  min-width: 0;
   height: 3px;
   -webkit-appearance: none;
   appearance: none;
   border-radius: 2px;
-  background: linear-gradient(
-    to right,
-    #4466cc var(--vol, 50%),
-    rgba(255,255,255,0.1) var(--vol, 50%)
-  );
   outline: none;
   cursor: pointer;
+  background: linear-gradient(to right,
+      var(--c1, #4466ff) var(--vol, 50%),
+      rgba(255, 255, 255, 0.14) var(--vol, 50%));
 }
 
 .volSlider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 9px;
-  height: 9px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: #6688cc;
+  background: #aabbff;
   cursor: pointer;
-  box-shadow: 0 0 5px rgba(100,140,220,0.5);
+  box-shadow: 0 0 6px rgba(100, 140, 220, 0.6);
+  transition: transform 0.2s;
 }
 
-/* ── Mobile ───────────────────────────────────────────────── */
+.volSlider::-webkit-slider-thumb:hover {
+  transform: scale(1.35);
+}
+
+.volSlider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 50%;
+  background: #aabbff;
+  box-shadow: 0 0 6px rgba(100, 140, 220, 0.6);
+}
+
+.volSlider:focus-visible {
+  outline: 2px solid #aaccff;
+  outline-offset: 4px;
+}
+
+.volNum {
+  font-family: var(--font-body);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-regular);
+  color: var(--text-muted);
+  min-width: 28px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── HP: dock dan mini naik sedikit supaya muat di padding atas section (4rem) ── */
+@media (max-width: 768px) {
+
+  .playerDock,
+  .playerMini {
+    top: max(0.6rem, env(safe-area-inset-top));
+    right: 0.8rem;
+  }
+
+  .player {
+    top: max(0.6rem, env(safe-area-inset-top));
+  }
+}
+
 @media (max-width: 480px) {
-  .player.expanded { width: 220px; }
-  .volSlider { width: 40px; }
+  .player {
+    width: calc(100vw - 1.6rem);
+    right: 0.8rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .player,
+  .playerMini,
+  .playBtn,
+  .miniPlay,
+  .showBtn,
+  .comfortBtn {
+    transition: none;
+  }
+
+  .playBtn:hover,
+  .showBtn:hover {
+    transform: none;
+  }
+
+  .beatRing {
+    animation: none;
+    display: none;
+  }
 }

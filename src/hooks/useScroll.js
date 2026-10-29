@@ -19,7 +19,10 @@ export function useScrollProgress() {
   return { progress, scrollY }
 }
 
-// Track which section is currently in view
+// Track which section is currently in view.
+// Aktif = section yang sedang dilewati garis tengah layar. Tidak bergantung pada
+// tinggi section, jadi section yang lebih tinggi dari layar (Phenomena, Ending)
+// tetap terdeteksi dengan benar.
 export function useActiveSection(sectionIds) {
   const [activeSection, setActiveSection] = useState(sectionIds[0])
 
@@ -30,7 +33,7 @@ export function useActiveSection(sectionIds) {
       if (!el) return
       const obs = new IntersectionObserver(
         ([entry]) => { if (entry.isIntersecting) setActiveSection(id) },
-        { threshold: 0.4 }
+        { rootMargin: '-50% 0px -50% 0px', threshold: 0 }
       )
       obs.observe(el)
       observers.push(obs)

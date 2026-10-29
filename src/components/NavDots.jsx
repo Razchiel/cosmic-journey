@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import styles from './NavDots.module.css'
 
 const SECTIONS = [
@@ -6,26 +7,27 @@ const SECTIONS = [
   { id: 'phenomena', label: 'Phenomena' },
   { id: 'deepspace', label: 'Deep Space' },
   { id: 'ending', label: 'Reflection' },
+  { id: 'wishing', label: 'Wishing Star' },
+  { id: 'gallery', label: 'Astronaut Gallery' },
 ]
 
-export default function NavDots({ active }) {
-  const scrollTo = (id) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
-  }
-
+function NavDots({ active, onNavigate }) {
   return (
     <nav className={styles.nav} aria-label="Section navigation">
       {SECTIONS.map(({ id, label }) => (
         <button
           key={id}
+          type="button"
           className={`${styles.dot} ${active === id ? styles.active : ''}`}
-          onClick={() => scrollTo(id)}
+          onClick={() => onNavigate(id)}
           aria-label={`Go to ${label}`}
-          title={label}
+          aria-current={active === id ? 'step' : undefined}
         >
-          <span className={styles.tooltip}>{label}</span>
+          <span className={styles.tooltip} aria-hidden="true">{label}</span>
         </button>
       ))}
     </nav>
   )
 }
+
+export default memo(NavDots)

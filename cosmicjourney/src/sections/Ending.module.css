@@ -1,0 +1,612 @@
+/* ... KODE CSS ANDA SEBELUMNYA TETAP SAMA ... */
+
+.ending {
+  background: rgba(4, 3, 15, 0.6);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bgGradient {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, transparent 20%, rgba(2, 1, 8, 0.95) 80%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.eclipseContainer {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 800px;
+  height: 800px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.eclipseCore {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 220px;
+  height: 220px;
+  background: #000000;
+  border-radius: 50%;
+  box-shadow:
+    0 0 80px 20px rgba(120, 60, 200, 0.8),
+    0 0 150px 60px rgba(100, 150, 255, 0.25),
+    inset 0 0 20px rgba(255, 255, 255, 0.1);
+}
+
+.recordRing {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(0deg);
+  border-radius: 50%;
+  border: 1px solid rgba(136, 170, 255, 0.15);
+  width: calc(240px + (var(--i) * 70px));
+  height: calc(240px + (var(--i) * 70px));
+  transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  transition-delay: calc(var(--i) * 0.1s);
+}
+
+.ringActive {
+  border-color: rgba(136, 170, 255, 0.6);
+  box-shadow: 0 0 20px rgba(136, 170, 255, 0.15), inset 0 0 20px rgba(136, 170, 255, 0.15);
+  transform: translate(-50%, -50%) rotate(180deg);
+}
+
+.content {
+  position: relative;
+  z-index: 10;
+  max-width: 600px;
+}
+
+.title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(2.5rem, 5vw, 4.5rem);
+  font-weight: 300;
+  color: #ffffff;
+  line-height: 1.15;
+  margin-bottom: 2rem;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 30px rgba(136, 170, 255, 0.3);
+}
+
+.title em {
+  font-style: italic;
+  color: #aaccff;
+  display: block;
+  font-size: 0.8em;
+}
+
+.sub {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.95rem;
+  color: #aabbee;
+  line-height: 2;
+  font-weight: 300;
+  margin-bottom: 3.5rem;
+}
+
+.messageBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 1rem;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(136, 170, 255, 0.4);
+  color: #aaccff;
+  padding: 1.2rem 3rem;
+  border-radius: 50px;
+  cursor: pointer;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 300;
+  letter-spacing: 0.15em;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 40px rgba(136, 170, 255, 0.15);
+  backdrop-filter: blur(10px);
+  margin-bottom: 3.5rem;
+  position: relative;
+  z-index: 50;
+}
+
+.messageBtn:hover {
+  border-color: rgba(136, 170, 255, 0.9);
+  background: rgba(136, 170, 255, 0.05);
+  box-shadow: 0 0 60px rgba(136, 170, 255, 0.4);
+  transform: scale(1.05);
+}
+
+.btnStar {
+  font-size: 0.7rem;
+  opacity: 0.6;
+  animation: starSpin 4s linear infinite;
+}
+
+.btnStar:last-child {
+  animation-direction: reverse;
+}
+
+@keyframes starSpin {
+  from {
+    transform: rotate(0deg);
+    opacity: 0.5;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  to {
+    transform: rotate(360deg);
+    opacity: 0.5;
+  }
+}
+
+.footer {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 0.95rem;
+  font-style: italic;
+  color: #8596aa;
+  letter-spacing: 0.06em;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 2, 8, 0.85);
+  backdrop-filter: blur(15px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 0.5s ease, visibility 0.5s ease;
+}
+
+.modalOpen {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.modalBox {
+  background: linear-gradient(135deg, rgba(20, 15, 35, 0.9), rgba(10, 5, 20, 0.95));
+  border: 1px solid rgba(120, 80, 200, 0.4);
+  padding: 3rem;
+  border-radius: 20px;
+  width: 90%;
+  max-width: 450px;
+  position: relative;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 40px rgba(120, 80, 200, 0.2);
+  z-index: 10;
+}
+
+.closeBtn {
+  position: absolute;
+  top: 1rem;
+  right: 1.5rem;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  z-index: 100;
+}
+
+.closeBtn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: #fff;
+  transform: scale(1.1);
+}
+
+.modalTitle {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 300;
+  color: #e0e5ff;
+  letter-spacing: 0.1em;
+  margin-bottom: 2rem;
+  font-size: 1.2rem;
+}
+
+.formContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.radioGroup {
+  display: flex;
+  gap: 1rem;
+}
+
+.radioGroup label {
+  flex: 1;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  cursor: pointer;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.85rem;
+  color: #8899aa;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.radioGroup input[type="radio"] {
+  display: none;
+}
+
+.radioGroup label.radioActive {
+  background: rgba(120, 80, 200, 0.2);
+  border-color: #8855ff;
+  color: #fff;
+}
+
+.radioGroup label.radioActiveOther {
+  background: rgba(255, 105, 180, 0.2);
+  border-color: #ff66cc;
+  color: #fff;
+  text-shadow: 0 0 10px rgba(255, 105, 180, 0.5);
+}
+
+.validationBox {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  animation: fadeIn 0.4s ease;
+}
+
+.validationHint {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.85rem;
+  color: #ff99cc;
+  margin-bottom: -0.5rem;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.nameInput {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 1.2rem;
+  border-radius: 10px;
+  color: #fff;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.2rem;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+.nameInput:focus {
+  border-color: #88aacc;
+}
+
+.submitBtn {
+  background: #fff;
+  color: #000;
+  border: none;
+  padding: 1rem;
+  border-radius: 10px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.submitBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(255, 255, 255, 0.2);
+}
+
+.ticketBox {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 10;
+  /* Pastikan kartu di atas bintang & ledakan */
+}
+
+.ticketContent {
+  background: linear-gradient(to bottom, #050508, #100b1a);
+  border: 1px solid rgba(136, 170, 255, 0.3);
+  padding: 3.5rem 2rem 2rem;
+  border-radius: 15px;
+  width: 90vw;
+  max-width: 500px;
+  max-height: 88vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 0 50px rgba(136, 170, 255, 0.1);
+}
+
+.constellationWrap {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 1rem;
+  margin-bottom: 2rem;
+}
+
+.constellationSvg {
+  width: 100%;
+  height: 120px;
+}
+
+.constellationLabel {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.75rem;
+  color: #88aacc;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-top: 0.5rem;
+}
+
+.recipientName {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 300;
+  color: #fff;
+  font-size: 1.2rem;
+  margin-bottom: 1.5rem;
+}
+
+.highlightName {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.8rem;
+  color: #aaccff;
+  font-style: italic;
+}
+
+.finalMessageText {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.4rem;
+  line-height: 1.6;
+  color: #e0e5ff;
+  font-weight: 300;
+  font-style: italic;
+  margin-bottom: 2rem;
+}
+
+.ticketFooter {
+  display: flex;
+  justify-content: space-between;
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: #8596aa;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+  padding-top: 1rem;
+}
+
+.signOff {
+  margin: -0.5rem 0 2rem;
+  font-family: 'Outfit', sans-serif;
+  color: #ccccff;
+  font-size: 0.9rem;
+  text-align: right;
+}
+
+.signature {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.8rem;
+  color: #ff99cc;
+  font-style: italic;
+  margin-top: 0.2rem;
+  word-break: break-word;
+}
+
+.noteInput {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  text-align: left;
+  resize: none;
+}
+
+.warpOverlay {
+  position: fixed;
+  inset: 0;
+  background: #000002;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 0.6s ease, visibility 0.6s ease;
+}
+
+.warpOpen {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.warpCanvasWrap {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.warpText {
+  position: relative;
+  z-index: 2;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(2.5rem, 5vw, 4.5rem);
+  font-weight: 300;
+  color: #ffffff;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  filter: blur(20px);
+  transform: scale(0.9);
+  animation: textBlurSequence 3s forwards;
+}
+
+@keyframes textBlurSequence {
+  0% {
+    opacity: 0;
+    filter: blur(20px);
+    transform: scale(0.9);
+  }
+
+  30% {
+    opacity: 1;
+    filter: blur(0px);
+    transform: scale(1);
+    text-shadow: 0 0 30px rgba(136, 170, 255, 0.5);
+  }
+
+  70% {
+    opacity: 1;
+    filter: blur(0px);
+    transform: scale(1);
+    text-shadow: 0 0 30px rgba(136, 170, 255, 0.5);
+  }
+
+  100% {
+    opacity: 0;
+    filter: blur(20px);
+    transform: scale(1.1);
+  }
+}
+
+/* ── KELAS UNTUK BINTANG GEMERLAP & HEART SUPERNOVA (Latar Belakang Modal) ── */
+.modalStarsWrap {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.modalStar {
+  position: absolute;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 0 10px 2px rgba(255, 255, 255, 0.8);
+  animation: twinkleModal linear infinite alternate;
+}
+
+@keyframes twinkleModal {
+  0% {
+    opacity: 0.1;
+    transform: scale(0.5);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1.3);
+  }
+}
+
+.heartNovaWrap {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.heartNova {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  color: #fff;
+  transform: translate(-50%, -50%) scale(0);
+  animation: heartNovaExplode 3s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+}
+
+.heartNova svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 5px var(--nova-color));
+}
+
+@keyframes heartNovaExplode {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 1;
+    color: #fff;
+    filter: drop-shadow(0 0 0 var(--nova-color));
+  }
+
+  20% {
+    opacity: 1;
+    color: #fff;
+    filter: drop-shadow(0 0 20px var(--nova-color)) drop-shadow(0 0 40px var(--nova-color));
+  }
+
+  100% {
+    transform: translate(-50%, -50%) scale(var(--nova-scale));
+    opacity: 0;
+    color: var(--nova-color);
+    filter: drop-shadow(0 0 60px var(--nova-color));
+  }
+}
+
+/* ── SHARE CARD BUTTON ── */
+.shareBtn {
+  margin-top: 1.5rem;
+  width: 100%;
+  background: rgba(136, 170, 255, 0.08);
+  border: 1px solid rgba(136, 170, 255, 0.45);
+  color: #cfe0ff;
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.85rem;
+  letter-spacing: 0.15em;
+  cursor: pointer;
+  transition: background 0.3s, box-shadow 0.3s, transform 0.2s;
+}
+
+.shareBtn:hover:not(:disabled) {
+  background: rgba(136, 170, 255, 0.18);
+  box-shadow: 0 0 24px rgba(136, 170, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.shareBtn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.shareBtn:focus-visible,
+.messageBtn:focus-visible,
+.submitBtn:focus-visible {
+  outline: 2px solid #aaccff;
+  outline-offset: 3px;
+}

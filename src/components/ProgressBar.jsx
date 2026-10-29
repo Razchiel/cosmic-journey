@@ -1,4 +1,6 @@
-export default function ProgressBar({ progress }) {
+import { memo } from 'react'
+
+function ProgressBar({ progress }) {
   return (
     <div
       style={{
@@ -19,3 +21,5 @@ export default function ProgressBar({ progress }) {
     />
   )
 }
+
+export default memo(ProgressBar)

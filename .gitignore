@@ -1,0 +1,72 @@
+
+# ==========================================
+# DEPENDENCIES
+# ==========================================
+node_modules/
+**/node_modules/
+
+# ==========================================
+# BUILD OUTPUT
+# ==========================================
+dist/
+build/
+coverage/
+
+# ==========================================
+# ENVIRONMENT & SECRETS
+# ==========================================
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# ==========================================
+# NETLIFY LOCAL FILES & DATABASE
+# ==========================================
+.netlify/
+
+# ==========================================
+# LOGS
+# ==========================================
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# ==========================================
+# CACHE & TEMPORARY FILES
+# ==========================================
+.cache/
+.vite/
+.temp/
+tmp/
+
+# ==========================================
+# OPERATING SYSTEM
+# ==========================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ==========================================
+# EDITORS
+# ==========================================
+.vscode/
+.idea/
+
+# ==========================================
+# GENERATED PROJECT ARCHIVES
+# Uncomment if these are only backup files
+# ==========================================
+# *.zip
+# cosmicjourney.zip
+
+# ==========================================
+# GENERATED PROJECT CONTEXT FILES
+# Uncomment only if not needed in repository
+# ==========================================
+# struktur-project.txt
+# cosmic_context*.txt
+# 00_master_context.txt
+# 01_phase_tasks.txt
+# phase.txt

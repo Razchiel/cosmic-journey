@@ -1,32 +1,62 @@
-import { useRef, useEffect, useState } from 'react'
+import { useEffect, useState, memo } from 'react'
 import { DEEP_SPACE_LINES } from '../data/index.js'
+import UniverseScale from '../components/UniverseScale.jsx'
 import styles from './DeepSpace.module.css'
 
-export default function DeepSpace() {
-  const sectionRef = useRef(null)
-  const [visibleLines, setVisibleLines] = useState([])
-  const [revealed, setRevealed] = useState(false)
+function LocalSupernovas() {
+  const [novas, setNovas] = useState([])
 
   useEffect(() => {
-    const obs = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !revealed) {
-          setRevealed(true)
-          DEEP_SPACE_LINES.forEach((_, i) => {
-            setTimeout(() => {
-              setVisibleLines((prev) => [...prev, i])
-            }, i * 700)
-          })
+    const interval = setInterval(() => {
+      setNovas((prev) => {
+        const newNova = {
+          id: Date.now() + Math.random(),
+          x: Math.random() * 100,
+          y: Math.random() * 100,
+          scale: Math.random() * 3 + 2,
+          color: ['#ffbb88', '#88ccff', '#ee88ff'][Math.floor(Math.random() * 3)]
         }
-      },
-      { threshold: 0.3 }
-    )
-    if (sectionRef.current) obs.observe(sectionRef.current)
-    return () => obs.disconnect()
-  }, [revealed])
+        return [...prev.slice(-3), newNova]
+      })
+    }, 2800)
+    return () => clearInterval(interval)
+  }, [])
 
   return (
-    <section id="deepspace" className={`cosmic-section ${styles.deepspace}`} ref={sectionRef}>
+    <div className={styles.supernovaContainer}>
+      {novas.map((nova) => (
+        <div key={nova.id} className={styles.supernova}
+          style={{
+            left: `${nova.x}%`, top: `${nova.y}%`,
+            '--nova-scale': nova.scale, '--nova-color': nova.color,
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
+function DeepSpace({ onFact, onNext }) {
+  const [visibleLines, setVisibleLines] = useState([])
+
+  // Dijalankan langsung saat komponen di-mount.
+  // IntersectionObserver tidak lagi dibutuhkan karena komponen ini di Lazy-Load (hanya merender saat aktif).
+  useEffect(() => {
+    const timeouts = DEEP_SPACE_LINES.map((_, i) => {
+      return setTimeout(() => {
+        setVisibleLines((prev) => [...prev, i])
+      }, (i * 700) + 300) // delay sedikit agar sinkron dengan fade CSS 400ms
+    })
+
+    return () => timeouts.forEach(clearTimeout)
+  }, [])
+
+  const allVisible = visibleLines.length === DEEP_SPACE_LINES.length
+
+  return (
+    <section id="deepspace" className={`cosmic-section ${styles.deepspace}`}>
+      <LocalSupernovas />
+
       <div className="noise-overlay" />
 
       <div className={styles.infinityWrap}>
@@ -37,7 +67,7 @@ export default function DeepSpace() {
 
       <div className={styles.content}>
         <p className="t-label" style={{ marginBottom: '1.5rem' }}>
-          Stage III — 10,000 light-years from home
+          Stage III: 10,000 light-years from home
         </p>
 
         <h2 className={styles.title}>Beyond the Known</h2>
@@ -53,9 +83,18 @@ export default function DeepSpace() {
             </p>
           ))}
         </div>
+
       </div>
 
-      {/* Floating distant objects */}
+      {/* Zoom-out dari Bumi sampai alam semesta teramati */}
+      {allVisible && <UniverseScale />}
+
+      <div className={`${styles.nextNav} ${allVisible ? styles.nextNavVisible : ''}`}>
+        <button className={styles.nextBtn} onClick={onNext}>
+          Reflect on the Journey <span className={styles.arrow}>↓</span>
+        </button>
+      </div>
+
       <div className={styles.floatingObjects}>
         {[...Array(6)].map((_, i) => (
           <div
@@ -73,3 +112,5 @@ export default function DeepSpace() {
     </section>
   )
 }
+
+export default memo(DeepSpace)

@@ -1,0 +1,243 @@
+.overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: #000002;
+    overflow: hidden;
+    animation: overlayIn 0.6s ease both;
+}
+
+@keyframes overlayIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.canvasWrap {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+}
+
+/* Cahaya biru Bumi muncul dari atas saat hitung mundur */
+.earthHorizon {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 2.4s ease;
+    background: radial-gradient(ellipse 80% 45% at 50% -8%, rgba(90, 160, 255, 0.6) 0%, rgba(60, 120, 230, 0.2) 50%, transparent 75%);
+}
+
+.earthHorizonOn {
+    opacity: 1;
+}
+
+.caption {
+    position: absolute;
+    z-index: 3;
+    left: 0;
+    right: 0;
+    bottom: 10vh;
+    text-align: center;
+    pointer-events: none;
+}
+
+.line {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-weight: 300;
+    font-size: clamp(1.3rem, 3vw, 2rem);
+    color: #c8d8ff;
+    animation: lineIn 1.2s ease both;
+}
+
+@keyframes lineIn {
+    from {
+        opacity: 0;
+        filter: blur(8px);
+    }
+
+    to {
+        opacity: 1;
+        filter: none;
+    }
+}
+
+.small {
+    font-family: 'Outfit', system-ui, sans-serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    color: #8fa0c8;
+    margin-bottom: 0.4rem;
+}
+
+.count {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 300;
+    font-size: clamp(4.5rem, 13vw, 9rem);
+    line-height: 1;
+    color: #fff;
+    text-shadow: 0 0 40px rgba(130, 180, 255, 0.8);
+    animation: countPop 0.9s ease both;
+}
+
+@keyframes countPop {
+    from {
+        opacity: 0;
+        transform: scale(1.5);
+    }
+
+    30% {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0.9;
+        transform: scale(1);
+    }
+}
+
+.flash {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    background: #dfeaff;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease-in;
+}
+
+.flashOn {
+    opacity: 1;
+}
+
+/* Roket 2D */
+.rocketWrap {
+    position: absolute;
+    z-index: 2;
+    left: 0;
+    right: 0;
+    top: 52%;
+    height: 0;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.rocket {
+    width: clamp(64px, 11vh, 100px);
+    margin-top: -9vh;
+    transform-origin: 50% 60%;
+    will-change: transform;
+}
+
+.rocketSvg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    filter: drop-shadow(0 0 10px rgba(140, 180, 255, 0.35));
+}
+
+.flame {
+    transform: scale(1, 0.001);
+    filter: drop-shadow(0 0 8px rgba(255, 140, 50, 0.9));
+}
+
+/* Konstelasi nama */
+.sky {
+    position: absolute;
+    z-index: 1;
+    top: 6vh;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: none;
+    padding: 0 1rem;
+}
+
+.skySvg {
+    width: min(70vw, 340px);
+    height: auto;
+    max-height: 34vh;
+    overflow: visible;
+}
+
+.skyLine {
+    fill: none;
+    stroke: rgba(170, 200, 255, 0.55);
+    stroke-width: 1.2;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: skyDraw 5s ease 0.6s forwards;
+}
+
+@keyframes skyDraw {
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+.skyStar {
+    opacity: 0;
+    animation: skyStarIn 0.9s ease forwards;
+}
+
+@keyframes skyStarIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.skyHalo {
+    fill: rgba(140, 190, 255, 0.28);
+    animation: skyTwinkle 2.4s ease-in-out infinite;
+}
+
+@keyframes skyTwinkle {
+
+    0%,
+    100% {
+        opacity: 0.5;
+    }
+
+    50% {
+        opacity: 1;
+    }
+}
+
+.skyLabel {
+    margin-top: 0.8rem;
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: clamp(1.2rem, 3vw, 1.7rem);
+    color: #dbe7ff;
+    text-shadow: 0 0 18px rgba(130, 180, 255, 0.7);
+    opacity: 0;
+    animation: lineIn 2.2s ease 5s forwards;
+}
+
+.skyNote {
+    margin-top: 0.3rem;
+    font-family: 'Outfit', system-ui, sans-serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: #8fa0c8;
+    text-align: center;
+    opacity: 0;
+    animation: lineIn 2.2s ease 6.8s forwards;
+}

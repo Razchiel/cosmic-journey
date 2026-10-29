@@ -1,0 +1,29 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none; /* tombol dan elemen lain tetap aman */
+  opacity: 0;
+  animation: warpIn 0.7s ease forwards;
+}
+
+.overlay canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Setelah section baru tampil: bintang memudar pelan */
+.arrive {
+  animation: warpOut 0.9s ease forwards;
+}
+
+@keyframes warpIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes warpOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}

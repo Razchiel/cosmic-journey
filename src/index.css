@@ -1,8 +1,9 @@
 /* ============================================================
-   COSMIC JOURNEY — Global Styles (Updated: brighter palette)
+   COSMIC JOURNEY — Global Styles (Fase 8: token keterbacaan, Fase 12: Comfort + gutter NavDots)
    ============================================================ */
-
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
@@ -12,55 +13,229 @@
   --font-display: 'Cormorant Garamond', Georgia, serif;
   --font-body: 'Outfit', system-ui, sans-serif;
 
-  /* Space palette — lebih terang dari sebelumnya */
-  --void:        #02021a;        /* was #000008 */
-  --deep:        #05051f;        /* was #00000f */
-  --nebula-dark: #080824;        /* was #04020e */
-  --blue-dim:    #0e1e42;        /* was #0a1428 */
-  --blue-mid:    #1e3566;        /* was #1a2d5a */
+  /* ── Latar ── */
+  --void: #02021a;
+  --deep: #05051f;
+  --nebula-dark: #080824;
+  --blue-dim: #0e1e42;
+  --blue-mid: #1e3566;
 
-  --star-white:  #f0f4ff;        /* was #e8eeff — lebih putih */
-  --star-dim:    #a0b4dd;        /* was #8899cc — lebih terang */
-  --star-muted:  #6677aa;        /* was #445577 — lebih terang */
+  /* ── Token warna teks (Fase 8) ──
+     Rasio kontras di atas --void (#02021a), perkiraan:
+       primary   #f0f4ff  ≈ 18:1
+       secondary #c3cfea  ≈ 13:1
+       muted     #9fb0d4  ≈ 9.5:1  (LANTAI: jangan dibuat lebih redup)
+     Di atas biru tengah (#1e3566) muted masih ≈ 5.5:1. */
+  --text-primary: #f0f4ff;
+  --text-secondary: #c3cfea;
+  --text-muted: #9fb0d4;
 
-  --accent-blue:   #5577ff;      /* was #4466ff */
-  --accent-purple: #9955ff;      /* was #8844ff */
-  --accent-pink:   #ff55bb;      /* was #ff44aa */
-  --accent-gold:   #ffdd55;      /* was #ffcc44 */
-  --accent-teal:   #55ffdd;      /* was #44ffcc */
+  /* Aksen untuk TEKS (kontras ≥ 4.5:1 di atas --void) */
+  --accent-blue: #5577ff;
+  --accent-purple: #9955ff;
+  --accent-pink: #ff55bb;
+  --accent-gold: #ffdd55;
+  --accent-teal: #55ffdd;
+  --accent-blue-text: #99bbff;
+  --accent-purple-text: #cc99ff;
+  --accent-pink-text: #ff99dd;
 
-  --glow-blue:   rgba(85, 119, 255, 0.35);   /* was 0.3 */
-  --glow-purple: rgba(153, 85, 255, 0.30);   /* was 0.25 */
-  --glow-pink:   rgba(255, 85, 187, 0.30);   /* was 0.25 */
+  /* Alias nama lama → token baru. Section yang masih memakai
+     var(--star-*) otomatis ikut terangkat ke lantai kontras.
+     CATATAN: nilai alias dihitung di :root, jadi override token di body.comfort-mode
+     TIDAK sampai ke alias ini. Mode Comfort harus mendefinisikan ulang alias juga. */
+  --star-white: var(--text-primary);
+  --star-dim: var(--text-secondary);
+  --star-muted: var(--text-muted);
 
-  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-out:    cubic-bezier(0, 0, 0.2, 1);
+  /* ── Skala ukuran ── */
+  --fs-display: clamp(2.75rem, 9vw, 5.5rem);
+  --fs-title: clamp(1.75rem, 5vw, 3rem);
+  --fs-subtitle: clamp(1.25rem, 3.2vw, 1.75rem);
+  --fs-body-lg: 1.125rem;
+  --fs-body: 1rem;
+  --fs-label: 0.8125rem;
+  --fs-small: 0.75rem;
+  /* batas bawah teks kecil */
+
+  /* ── Weight ── */
+  --fw-display: 300;
+  /* hanya untuk font display besar */
+  --fw-regular: 400;
+  /* teks kecil dan isi */
+  --fw-medium: 500;
+
+  /* ── Ritme baca ── */
+  --lh-tight: 1.15;
+  --lh-body: 1.75;
+  --measure: 62ch;
+  /* lebar baris paragraf (target 45–70 karakter) */
+  --ls-label: 0.2em;
+  /* letter-spacing label kapital (lebih longgar dari 0.35em lama) */
+
+  /* Fase 12: gutter kanan di HP supaya konten tidak tertimpa titik NavDots
+     (titik ±10px di right 0.8rem, area sentuh ±9px; lebar 360px → titik mulai x≈330) */
+  --nav-gutter: 2.25rem;
+
+  /* ── Text-shadow gelap berlapis tipis (BUKAN glow warna), untuk teks di atas bintang ── */
+  --text-shadow-soft:
+    0 1px 2px rgba(1, 1, 12, 0.8),
+    0 0 10px rgba(1, 1, 12, 0.55);
+  --text-shadow-strong:
+    0 1px 2px rgba(1, 1, 12, 0.9),
+    0 2px 8px rgba(1, 1, 12, 0.7),
+    0 0 22px rgba(1, 1, 12, 0.5);
+
+  --glow-blue: rgba(85, 119, 255, 0.35);
+  --glow-purple: rgba(153, 85, 255, 0.30);
+  --glow-pink: rgba(255, 85, 187, 0.30);
 }
 
-html {
-  scroll-behavior: smooth;
-  font-size: 16px;
+/* Mode Comfort (tombol di MusicPlayer): App menambah class ini ke <body>.
+   Teks dibuat jauh lebih terang dan diberi bayangan gelap tipis di atas bintang.
+   Alias --star-* didefinisikan ulang di sini (lihat catatan di :root).
+   Redup dan ketenangan starfield diatur di StarField (prop calm). */
+body.comfort-mode {
+  --text-primary: #ffffff;
+  --text-secondary: #e8eefc;
+  --text-muted: #d0dbf3;
+
+  --star-white: #ffffff;
+  --star-dim: #e8eefc;
+  --star-muted: #d0dbf3;
+
+  --accent-blue-text: #b8d0ff;
+  --accent-purple-text: #deb8ff;
+  --accent-pink-text: #ffb8e6;
 }
 
+/* Bayangan gelap tipis diwarisi semua teks di dalam section (elemen yang punya
+   text-shadow sendiri tetap memakai miliknya). */
+body.comfort-mode .section-wrapper {
+  text-shadow: var(--text-shadow-soft);
+}
+
+/* Comfort: kurangi gerak. Durasi dibuat sangat pendek (bukan animation: none) supaya
+   animasi masuk yang memakai fill-mode tetap berakhir di keadaan akhirnya, dan
+   animasi tak hingga cuma berjalan sekali lalu diam. */
+body.comfort-mode *,
+body.comfort-mode *::before,
+body.comfort-mode *::after {
+  animation-duration: 0.001ms !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+}
+
+body.comfort-mode .section-wrapper {
+  transition-duration: 0.2s;
+}
+
+/* Elemen dekoratif yang tanpa gerak jadi tidak berarti: sama seperti aturan reduced motion */
+body.comfort-mode [class*="heartNova"] {
+  display: none !important;
+}
+
+body.comfort-mode [class*="modalStar"] {
+  opacity: 0.7;
+  transform: none;
+}
+
+body.comfort-mode [class*="icoShock"] {
+  opacity: 0;
+}
+
+body.comfort-mode [class*="recordRing"] {
+  transition: none !important;
+}
+
+html,
 body {
+  font-size: 16px;
   background: var(--void);
-  color: var(--star-white);
+  color: var(--text-primary);
   font-family: var(--font-body);
   font-weight: 300;
-  overflow-x: hidden;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  /* address bar HP: tinggi mengikuti layar yang benar-benar terlihat */
+  /* MENGUNCI SCROLL GLOBAL & INPUT MOUSE WHEEL/SWIPE */
+  overflow: hidden;
   cursor: crosshair;
 }
 
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: var(--void); }
-::-webkit-scrollbar-thumb { background: var(--blue-mid); border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: var(--accent-blue); }
+::-webkit-scrollbar {
+  width: 4px;
+}
 
-::selection { background: var(--glow-blue); color: var(--star-white); }
+::-webkit-scrollbar-track {
+  background: var(--void);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--blue-mid);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-blue);
+}
+
+::selection {
+  background: var(--glow-blue);
+  color: var(--text-primary);
+}
+
+/* WRAPPER SECTION PENGGANTI MAIN SCROLL */
+.section-wrapper {
+  position: relative;
+  z-index: 1;
+  /* Mengatur layer konten di atas StarField (zIndex: 0) */
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: opacity 0.4s ease-in-out;
+}
+
+.section-wrapper.hidden {
+  opacity: 0;
+}
+
+.section-wrapper.visible {
+  opacity: 1;
+}
+
+/* Transisi gelap-terang antar-section (selain intro → solar) */
+.fade-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--void);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.fade-overlay.fade-dark {
+  opacity: 1;
+  pointer-events: auto;
+  /* cegah klik selama transisi */
+  transition: opacity var(--fade-out) ease-in;
+}
+
+.fade-overlay.fade-light {
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity var(--fade-in) ease-out;
+}
 
 .cosmic-section {
   position: relative;
   min-height: 100vh;
+  min-height: 100dvh;
+  /* sebelumnya hanya 100vh: lebih tinggi dari layar saat address bar HP tampil */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -70,33 +245,50 @@ body {
   isolation: isolate;
 }
 
-/* Typography */
+/* Ending punya min-height: 100vh sendiri di modulnya; id menang atas class modul */
+#ending {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Typography (kelas global memakai token; ukuran label naik dari 0.7rem ke 0.75rem+) */
 .t-label {
   font-family: var(--font-body);
-  font-size: 0.7rem;
-  font-weight: 300;
+  font-size: var(--fs-label);
+  font-weight: var(--fw-regular);
   letter-spacing: 0.35em;
   text-transform: uppercase;
-  color: var(--star-muted);
+  color: var(--text-muted);
 }
 
 .t-heading {
   font-family: var(--font-display);
-  font-weight: 300;
-  line-height: 1.1;
-  color: var(--star-white);
+  font-weight: var(--fw-display);
+  line-height: var(--lh-tight);
+  color: var(--text-primary);
 }
 
 .t-body {
   font-family: var(--font-body);
-  font-weight: 300;
-  line-height: 1.9;
-  color: var(--star-dim);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-body);
+  color: var(--text-secondary);
 }
 
-.glow-blue   { text-shadow: 0 0 30px var(--glow-blue);   color: #99bbff; }
-.glow-purple { text-shadow: 0 0 30px var(--glow-purple);  color: #cc99ff; }
-.glow-pink   { text-shadow: 0 0 30px var(--glow-pink);    color: #ff99dd; }
+.glow-blue {
+  text-shadow: 0 0 30px var(--glow-blue);
+  color: var(--accent-blue-text);
+}
+
+.glow-purple {
+  text-shadow: 0 0 30px var(--glow-purple);
+  color: var(--accent-purple-text);
+}
+
+.glow-pink {
+  text-shadow: 0 0 30px var(--glow-pink);
+  color: var(--accent-pink-text);
+}
 
 button {
   cursor: pointer;
@@ -106,6 +298,13 @@ button {
   border: none;
   background: none;
   color: inherit;
+}
+
+/* Cadangan indikator fokus keyboard untuk tombol lama yang belum punya.
+   Tombol dengan :focus-visible sendiri (spesifisitas lebih tinggi) tidak terpengaruh. */
+button:focus-visible {
+  outline: 2px solid #aaccff;
+  outline-offset: 3px;
 }
 
 .noise-overlay {
@@ -118,5 +317,50 @@ button {
 }
 
 @media (max-width: 768px) {
-  .cosmic-section { padding: 4rem 1.25rem; }
+
+  /* Fase 12: padding kanan memakai --nav-gutter agar konten tidak menyentuh titik NavDots */
+  .cosmic-section {
+    padding: 4rem var(--nav-gutter) 4rem 1.25rem;
+  }
+}
+
+/* PENTING: rule ini memilih lewat POTONGAN NAMA class. Container MusicPlayer (player,
+   playerMini, playerDock) harus tetap memuat kata "player" huruf kecil, dan tombol
+   showBtn memuat "showBtn". Tombol Comfort ada di dalam container itu, jadi ikut tersembunyi. */
+body.hide-global-ui nav,
+body.hide-global-ui div[class*="player"],
+body.hide-global-ui button[class*="showBtn"] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.5s ease !important;
+}
+
+/* ── Reduced motion: transisi global dan animasi dekoratif Ending ──
+   (Ending.module.css tidak diubah; class modul dipilih lewat potongan nama,
+   pola yang sama dengan aturan hide-global-ui di atas.) */
+@media (prefers-reduced-motion: reduce) {
+  .section-wrapper {
+    transition-duration: 0.2s;
+  }
+
+  [class*="btnStar"],
+  [class*="heartNova"],
+  [class*="nextBtn"] {
+    animation: none !important;
+  }
+
+  /* Ledakan hati dekoratif dimatikan sepenuhnya; bintang latar tampil statis */
+  [class*="heartNova"] {
+    display: none !important;
+  }
+
+  [class*="modalStar"] {
+    animation: none !important;
+    opacity: 0.7;
+    transform: none;
+  }
+
+  [class*="recordRing"] {
+    transition: none !important;
+  }
 }

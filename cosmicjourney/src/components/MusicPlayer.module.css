@@ -1,0 +1,310 @@
+/* ═══════════════════════════════════════════════════════════
+   COSMIC MUSIC PLAYER — Lofi Dreamy Always-Visible
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Show button (when hidden) ────────────────────────────── */
+.showBtn {
+  position: fixed;
+  top: 1.2rem;
+  right: 1.2rem;
+  z-index: 200;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(8, 8, 28, 0.7);
+  border: 1px solid rgba(100, 120, 200, 0.25);
+  color: #6688cc;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  transition: all 0.3s;
+}
+.showBtn:hover {
+  border-color: rgba(140, 170, 255, 0.5);
+  color: #aabbff;
+  transform: scale(1.1);
+}
+
+/* ── Main player ──────────────────────────────────────────── */
+.player {
+  position: fixed;
+  top: 1.2rem;
+  right: 1.2rem;
+  z-index: 200;
+  width: 270px;
+  padding: 14px;
+
+  background: rgba(5, 5, 20, 0.72);
+  border: 1px solid rgba(80, 100, 180, 0.2);
+  border-radius: 20px;
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.5),
+    0 0 0px transparent,
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+  transition: box-shadow 0.25s ease, border-color 0.35s ease, transform 0.1s ease;
+}
+
+.player.playing {
+  border-color: rgba(100, 130, 220, 0.3);
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.55),
+    0 0 calc(8px + calc(var(--glow-int, 0) * 28px)) var(--glow, #4466ff),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.player.beat {
+  transform: scale(1.012);
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.55),
+    0 0 44px var(--glow, #4466ff),
+    0 0 88px color-mix(in srgb, var(--glow, #4466ff) 40%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* ── Close button ─────────────────────────────────────────── */
+.closeBtn {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.04);
+  border: none;
+  color: #7487b0;
+  font-size: 0.95rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+  padding: 0;
+}
+.closeBtn:hover { color: #8899bb; background: rgba(255,255,255,0.08); }
+
+/* ── Top row: art + info ──────────────────────────────────── */
+.topRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+/* ── Art canvas wrap ──────────────────────────────────────── */
+.artWrap {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  overflow: hidden;
+  flex-shrink: 0;
+  cursor: pointer;
+  border: 1px solid rgba(100, 130, 200, 0.2);
+  transition: border-color 0.3s;
+}
+.artWrap:hover { border-color: rgba(140, 180, 255, 0.45); }
+
+.artCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.artOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.artWrap:hover .artOverlay { opacity: 1; }
+
+.beatRing {
+  position: absolute;
+  inset: -3px;
+  border-radius: 14px;
+  border: 2px solid;
+  opacity: 0.9;
+  animation: beatRingAnim 0.15s ease-out forwards;
+  pointer-events: none;
+}
+@keyframes beatRingAnim {
+  from { inset: 0; opacity: 0.9; }
+  to   { inset: -8px; opacity: 0; border-radius: 18px; }
+}
+
+/* ── Track meta ───────────────────────────────────────────── */
+.trackMeta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-right: 16px; /* space for close btn */
+}
+
+.trackNameWrap {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.trackName {
+  display: inline-block;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #d0dcff;
+  letter-spacing: 0.02em;
+  transition: opacity 0.28s, transform 0.28s;
+}
+.fadeOut { opacity: 0; transform: translateY(-6px); }
+.fadeIn  { opacity: 1; transform: translateY(0); }
+
+.trackArtist {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.68rem;
+  color: #8396bd;
+  letter-spacing: 0.08em;
+}
+
+.lofiBadge {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.58rem;
+  letter-spacing: 0.18em;
+  border: 1px solid;
+  border-radius: 4px;
+  padding: 1px 5px;
+  width: fit-content;
+  opacity: 0.75;
+}
+
+/* ── Bar visualizer ───────────────────────────────────────── */
+.vizWrap {
+  margin: 0 0 8px;
+  height: 32px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.barCanvas { display: block; width: 100%; height: 100%; }
+
+/* ── Progress ─────────────────────────────────────────────── */
+.progressArea {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.timeLabel {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.6rem;
+  color: #7487b0;
+  font-variant-numeric: tabular-nums;
+  min-width: 26px;
+  text-align: center;
+}
+
+.progressTrack {
+  flex: 1;
+  height: 3px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 3px;
+  position: relative;
+  transition: height 0.2s;
+}
+.progressFill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.25s linear;
+}
+
+/* ── Controls row ─────────────────────────────────────────── */
+.controlsRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.playBtn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: rgba(80, 110, 200, 0.15);
+  border: 1px solid rgba(100, 140, 220, 0.28);
+  color: #99bbff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  padding: 0;
+}
+.playBtn:hover {
+  background: rgba(100, 140, 255, 0.25);
+  border-color: rgba(140, 180, 255, 0.5);
+  color: #ccddff;
+  transform: scale(1.12);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--btn-col, #4466ff) 50%, transparent);
+}
+.player.beat .playBtn {
+  box-shadow: 0 0 22px var(--btn-col, #4466ff);
+}
+
+/* ── Volume ───────────────────────────────────────────────── */
+.volRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  color: #7487b0;
+}
+
+.volSlider {
+  flex: 1;
+  height: 3px;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  background: linear-gradient(
+    to right,
+    var(--c1, #4466ff) var(--vol, 50%),
+    rgba(255,255,255,0.08) var(--vol, 50%)
+  );
+}
+.volSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  background: #8899ee;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(100,140,220,0.6);
+  transition: transform 0.2s;
+}
+.volSlider::-webkit-slider-thumb:hover { transform: scale(1.35); }
+
+.volNum {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.62rem;
+  color: #7487b0;
+  min-width: 22px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 480px) {
+  .player { width: calc(100vw - 2.4rem); right: 1.2rem; }
+}

@@ -1,0 +1,4050 @@
+COSMIC JOURNEY: SNAPSHOT KODE (subset per fase, hemat token)
+Dibuat: 2026-10-29 15:04
+Posisi: siap untuk mengerjakan FASE 9B (Terapkan token: Ending, Wishing, Form, Secret, Gallery, popup, player, nav)
+Snapshot ini hanya berisi file yang relevan untuk fase ini, kondisi TERBARU.
+File yang TIDAK tercantum di DAFTAR FILE sudah ada di proyek tetapi sengaja tidak disertakan.
+Jangan mengarang isinya; jika butuh salah satunya, minta saya mengunggahnya.
+File bertanda [CUPLIKAN] hanya berisi sebagian aturan CSS, bukan file lengkap.
+
+DAFTAR FILE (disertakan):
+- src/components/FactPopup.jsx
+- src/components/FactPopup.module.css
+- src/components/MessageBox.jsx
+- src/components/MessageBox.module.css
+- src/components/MusicPlayer.module.css
+- src/components/NavDots.jsx
+- src/components/NavDots.module.css
+- src/components/WishForm.module.css
+- src/index.css
+- src/sections/Ending.jsx
+- src/sections/Ending.module.css
+- src/sections/Gallery.module.css
+- src/sections/SecretEnding.module.css
+- src/sections/Wishing.module.css
+
+FILE LAIN DI PROYEK (tidak disertakan):
+index.html, netlify.toml, package.json, vite.config.js, netlify/functions/get-wishes.js, netlify/functions/submit-wish.js, netlify/lib/shared.js, supabase/schema.sql, src/App.jsx, src/components/HomeWarp.jsx, src/components/HomeWarp.module.css, src/components/MusicPlayer.jsx, src/components/ProgressBar.jsx, src/components/StarField.jsx, src/components/UniverseScale.jsx, src/components/UniverseScale.module.css, src/components/universeScenes.jsx, src/components/WarpOverlay.jsx, src/components/WarpOverlay.module.css, src/components/WishForm.jsx, src/data/dummyWishes.js, src/data/index.js, src/hooks/useAudio.js, src/hooks/useScroll.js, src/hooks/useSfx.js, src/main.jsx, src/sections/DeepSpace.jsx, src/sections/DeepSpace.module.css, src/sections/Gallery.jsx, src/sections/Intro.jsx, src/sections/Intro.module.css, src/sections/Phenomena.jsx, src/sections/Phenomena.module.css, src/sections/SecretEnding.jsx, src/sections/SolarSystem.jsx, src/sections/SolarSystem.module.css, src/sections/Wishing.jsx, src/services/wishes.js
+
+======================================================================
+
+===== FILE: src/components/FactPopup.jsx =====
+import { useEffect } from 'react'
+import styles from './FactPopup.module.css'
+
+export default function FactPopup({ fact, onClose }) {
+  useEffect(() => {
+    if (!fact) return
+    const timer = setTimeout(onClose, 6000)
+    return () => clearTimeout(timer)
+  }, [fact, onClose])
+
+  return (
+    <div className={`${styles.popup} ${fact ? styles.show : ''}`} role="status">
+      {fact && (
+        <>
+          <div className={styles.header}>
+            <span className={styles.title}>{fact.title}</span>
+            {fact.subtitle && <span className={styles.subtitle}>{fact.subtitle}</span>}
+            <button className={styles.close} onClick={onClose} aria-label="Close">×</button>
+          </div>
+          <p className={styles.text}>{fact.text}</p>
+          {fact.extra && <p className={styles.extra}>{fact.extra}</p>}
+        </>
+      )}
+    </div>
+  )
+}
+===== END FILE =====
+
+===== FILE: src/components/FactPopup.module.css =====
+.popup {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(120px);
+  background: rgba(4, 4, 18, 0.95);
+  border: 1px solid #1e3050;
+  border-radius: 14px;
+  padding: 1.1rem 1.4rem;
+  max-width: 380px;
+  width: calc(100% - 2.5rem);
+  z-index: 150;
+  transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s;
+  opacity: 0;
+  pointer-events: none;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+}
+
+.popup.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  pointer-events: all;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1rem;
+  font-weight: 400;
+  color: #aabbdd;
+  flex: 1;
+}
+
+.subtitle {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.15em;
+  color: #7f93bd;
+  text-transform: uppercase;
+}
+
+.close {
+  color: #7f90aa;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0 0.2rem;
+  transition: color 0.2s;
+  background: none;
+  border: none;
+  line-height: 1;
+}
+
+.close:hover { color: #aabbdd; }
+
+.text {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 300;
+  color: #9aabcf;
+  line-height: 1.7;
+}
+
+.extra {
+  margin-top: 0.5rem;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.76rem;
+  color: #7f93b3;
+  font-style: italic;
+  line-height: 1.6;
+}
+===== END FILE =====
+
+===== FILE: src/components/MessageBox.jsx =====
+import { useEffect, useState } from 'react'
+import styles from './MessageBox.module.css'
+
+export default function MessageBox({ message, onClose }) {
+  const [displayed, setDisplayed] = useState('')
+  const [done, setDone] = useState(false)
+
+  useEffect(() => {
+    if (!message) { setDisplayed(''); setDone(false); return }
+    setDisplayed('')
+    setDone(false)
+
+    let i = 0
+    const interval = setInterval(() => {
+      if (i < message.length) {
+        setDisplayed(message.slice(0, i + 1))
+        i++
+      } else {
+        setDone(true)
+        clearInterval(interval)
+      }
+    }, 24)
+
+    return () => clearInterval(interval)
+  }, [message])
+
+  const handleBackdrop = (e) => {
+    if (e.target === e.currentTarget) onClose()
+  }
+
+  if (!message) return null
+
+  return (
+    <div className={styles.overlay} onClick={handleBackdrop} role="dialog" aria-modal="true" aria-label="Message from the universe">
+      <div className={styles.card}>
+        <div className={styles.deco}>✦</div>
+        <p className={styles.label}>A message from the universe</p>
+        <p className={styles.text}>
+          {displayed}
+          {!done && <span className={styles.cursor} />}
+        </p>
+        {done && (
+          <button className={styles.closeBtn} onClick={onClose}>
+            Return to the cosmos
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+===== END FILE =====
+
+===== FILE: src/components/MessageBox.module.css =====
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 8, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  backdrop-filter: blur(6px);
+  animation: fadeIn 0.4s ease;
+  padding: 1.5rem;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.card {
+  background: rgba(4, 4, 20, 0.98);
+  border: 1px solid #1a2d50;
+  border-radius: 20px;
+  padding: 3rem 2.5rem;
+  max-width: 460px;
+  width: 100%;
+  text-align: center;
+  animation: slideUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 0 80px rgba(68, 102, 255, 0.08), 0 40px 80px rgba(0, 0, 0, 0.6);
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(30px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.deco {
+  font-size: 1.8rem;
+  color: #6644aa;
+  margin-bottom: 1rem;
+  animation: glowPulse 2.5s ease-in-out infinite;
+  display: block;
+}
+
+@keyframes glowPulse {
+  0%, 100% { text-shadow: 0 0 15px rgba(102, 68, 170, 0.5); }
+  50% { text-shadow: 0 0 35px rgba(136, 68, 255, 0.9), 0 0 70px rgba(136, 68, 255, 0.3); }
+}
+
+.label {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: #7f93bd;
+  margin-bottom: 2rem;
+}
+
+.text {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.35rem;
+  font-weight: 300;
+  font-style: italic;
+  color: #aabbdd;
+  line-height: 1.85;
+  min-height: 4rem;
+}
+
+.cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  background: #6644aa;
+  margin-left: 2px;
+  vertical-align: middle;
+  animation: blink 0.8s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.closeBtn {
+  margin-top: 2.5rem;
+  background: transparent;
+  border: 1px solid #2a3d5a;
+  color: #9aabcf;
+  padding: 0.65rem 2rem;
+  border-radius: 50px;
+  cursor: pointer;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 300;
+  letter-spacing: 0.12em;
+  transition: all 0.3s;
+  animation: fadeIn 0.5s ease;
+}
+
+.closeBtn:hover {
+  border-color: #4466aa;
+  color: #8899bb;
+  box-shadow: 0 0 20px rgba(68, 102, 170, 0.15);
+}
+===== END FILE =====
+
+===== FILE: src/components/MusicPlayer.module.css =====
+/* ═══════════════════════════════════════════════════════════
+   COSMIC MUSIC PLAYER — Lofi Dreamy Always-Visible
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Show button (when hidden) ────────────────────────────── */
+.showBtn {
+  position: fixed;
+  top: 1.2rem;
+  right: 1.2rem;
+  z-index: 200;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(8, 8, 28, 0.7);
+  border: 1px solid rgba(100, 120, 200, 0.25);
+  color: #6688cc;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  transition: all 0.3s;
+}
+.showBtn:hover {
+  border-color: rgba(140, 170, 255, 0.5);
+  color: #aabbff;
+  transform: scale(1.1);
+}
+
+/* ── Main player ──────────────────────────────────────────── */
+.player {
+  position: fixed;
+  top: 1.2rem;
+  right: 1.2rem;
+  z-index: 200;
+  width: 270px;
+  padding: 14px;
+
+  background: rgba(5, 5, 20, 0.72);
+  border: 1px solid rgba(80, 100, 180, 0.2);
+  border-radius: 20px;
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.5),
+    0 0 0px transparent,
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+  transition: box-shadow 0.25s ease, border-color 0.35s ease, transform 0.1s ease;
+}
+
+.player.playing {
+  border-color: rgba(100, 130, 220, 0.3);
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.55),
+    0 0 calc(8px + calc(var(--glow-int, 0) * 28px)) var(--glow, #4466ff),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.player.beat {
+  transform: scale(1.012);
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.55),
+    0 0 44px var(--glow, #4466ff),
+    0 0 88px color-mix(in srgb, var(--glow, #4466ff) 40%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* ── Close button ─────────────────────────────────────────── */
+.closeBtn {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.04);
+  border: none;
+  color: #7487b0;
+  font-size: 0.95rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+  padding: 0;
+}
+.closeBtn:hover { color: #8899bb; background: rgba(255,255,255,0.08); }
+
+/* ── Top row: art + info ──────────────────────────────────── */
+.topRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+/* ── Art canvas wrap ──────────────────────────────────────── */
+.artWrap {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  overflow: hidden;
+  flex-shrink: 0;
+  cursor: pointer;
+  border: 1px solid rgba(100, 130, 200, 0.2);
+  transition: border-color 0.3s;
+}
+.artWrap:hover { border-color: rgba(140, 180, 255, 0.45); }
+
+.artCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.artOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.artWrap:hover .artOverlay { opacity: 1; }
+
+.beatRing {
+  position: absolute;
+  inset: -3px;
+  border-radius: 14px;
+  border: 2px solid;
+  opacity: 0.9;
+  animation: beatRingAnim 0.15s ease-out forwards;
+  pointer-events: none;
+}
+@keyframes beatRingAnim {
+  from { inset: 0; opacity: 0.9; }
+  to   { inset: -8px; opacity: 0; border-radius: 18px; }
+}
+
+/* ── Track meta ───────────────────────────────────────────── */
+.trackMeta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-right: 16px; /* space for close btn */
+}
+
+.trackNameWrap {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.trackName {
+  display: inline-block;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #d0dcff;
+  letter-spacing: 0.02em;
+  transition: opacity 0.28s, transform 0.28s;
+}
+.fadeOut { opacity: 0; transform: translateY(-6px); }
+.fadeIn  { opacity: 1; transform: translateY(0); }
+
+.trackArtist {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.68rem;
+  color: #8396bd;
+  letter-spacing: 0.08em;
+}
+
+.lofiBadge {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.58rem;
+  letter-spacing: 0.18em;
+  border: 1px solid;
+  border-radius: 4px;
+  padding: 1px 5px;
+  width: fit-content;
+  opacity: 0.75;
+}
+
+/* ── Bar visualizer ───────────────────────────────────────── */
+.vizWrap {
+  margin: 0 0 8px;
+  height: 32px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.barCanvas { display: block; width: 100%; height: 100%; }
+
+/* ── Progress ─────────────────────────────────────────────── */
+.progressArea {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.timeLabel {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.6rem;
+  color: #7487b0;
+  font-variant-numeric: tabular-nums;
+  min-width: 26px;
+  text-align: center;
+}
+
+.progressTrack {
+  flex: 1;
+  height: 3px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 3px;
+  position: relative;
+  transition: height 0.2s;
+}
+.progressFill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.25s linear;
+}
+
+/* ── Controls row ─────────────────────────────────────────── */
+.controlsRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.playBtn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: rgba(80, 110, 200, 0.15);
+  border: 1px solid rgba(100, 140, 220, 0.28);
+  color: #99bbff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  padding: 0;
+}
+.playBtn:hover {
+  background: rgba(100, 140, 255, 0.25);
+  border-color: rgba(140, 180, 255, 0.5);
+  color: #ccddff;
+  transform: scale(1.12);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--btn-col, #4466ff) 50%, transparent);
+}
+.player.beat .playBtn {
+  box-shadow: 0 0 22px var(--btn-col, #4466ff);
+}
+
+/* ── Volume ───────────────────────────────────────────────── */
+.volRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  color: #7487b0;
+}
+
+.volSlider {
+  flex: 1;
+  height: 3px;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  background: linear-gradient(
+    to right,
+    var(--c1, #4466ff) var(--vol, 50%),
+    rgba(255,255,255,0.08) var(--vol, 50%)
+  );
+}
+.volSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  background: #8899ee;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(100,140,220,0.6);
+  transition: transform 0.2s;
+}
+.volSlider::-webkit-slider-thumb:hover { transform: scale(1.35); }
+
+.volNum {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.62rem;
+  color: #7487b0;
+  min-width: 22px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 480px) {
+  .player { width: calc(100vw - 2.4rem); right: 1.2rem; }
+}
+===== END FILE =====
+
+===== FILE: src/components/NavDots.jsx =====
+import { memo } from 'react'
+import styles from './NavDots.module.css'
+
+const SECTIONS = [
+  { id: 'intro', label: 'Departure' },
+  { id: 'solar', label: 'Solar System' },
+  { id: 'phenomena', label: 'Phenomena' },
+  { id: 'deepspace', label: 'Deep Space' },
+  { id: 'ending', label: 'Reflection' },
+  { id: 'wishing', label: 'Wishing Star' },
+  { id: 'gallery', label: 'Astronaut Gallery' },
+]
+
+function NavDots({ active, onNavigate }) {
+  return (
+    <nav className={styles.nav} aria-label="Section navigation">
+      {SECTIONS.map(({ id, label }) => (
+        <button
+          key={id}
+          type="button"
+          className={`${styles.dot} ${active === id ? styles.active : ''}`}
+          onClick={() => onNavigate(id)}
+          aria-label={`Go to ${label}`}
+          aria-current={active === id ? 'step' : undefined}
+        >
+          <span className={styles.tooltip} aria-hidden="true">{label}</span>
+        </button>
+      ))}
+    </nav>
+  )
+}
+
+export default memo(NavDots)
+===== END FILE =====
+
+===== FILE: src/components/NavDots.module.css =====
+/* ═══════════════════════════════════════════════════════════
+   COSMIC NAV DOTS — Side Navigation
+   ═══════════════════════════════════════════════════════════ */
+
+.nav {
+  position: fixed;
+  top: 50%;
+  right: 1.5rem;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  z-index: 100;
+}
+
+.dot {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.3s ease;
+}
+
+/* Area sentuh diperluas (±30px) tanpa mengubah ukuran titik; antar area tidak tumpang tindih */
+.dot::before {
+  content: '';
+  position: absolute;
+  inset: -9px;
+  border-radius: 50%;
+}
+
+.dot.active {
+  background: #ffffff;
+  border-color: rgba(100, 150, 255, 0.8);
+  box-shadow: 0 0 12px rgba(140, 180, 255, 0.8);
+  transform: scale(1.3);
+}
+
+.dot:focus-visible {
+  outline: 2px solid #aaccff;
+  outline-offset: 4px;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.tooltip {
+  position: absolute;
+  right: 150%;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(10, 15, 30, 0.8);
+  border: 1px solid rgba(100, 140, 255, 0.3);
+  padding: 6px 12px;
+  border-radius: 6px;
+  color: #ccd6ff;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+.dot:focus-visible .tooltip {
+  opacity: 1;
+  visibility: visible;
+  right: 180%;
+}
+
+/* Hover hanya untuk perangkat yang punya hover (di layar sentuh tooltip tidak "menempel") */
+@media (hover: hover) {
+  .dot:hover {
+    background: rgba(255, 255, 255, 0.6);
+    transform: scale(1.2);
+  }
+
+  .dot.active:hover {
+    background: #ffffff;
+    transform: scale(1.3);
+  }
+
+  .dot:hover .tooltip {
+    opacity: 1;
+    visibility: visible;
+    right: 180%;
+  }
+}
+
+/* Navigasi dikurangi ukurannya tapi TETAP DIMUNCULKAN di mobile */
+@media (max-width: 768px) {
+  .nav {
+    right: 0.8rem;
+    transform: translateY(-50%) scale(0.85);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .dot,
+  .tooltip {
+    transition: none;
+  }
+}
+===== END FILE =====
+
+===== FILE: src/components/WishForm.module.css =====
+/* Modal form permintaan. Di-portal ke <body> agar di atas NavDots & MusicPlayer.
+   Tinggi mengikuti visual viewport (keyboard virtual) lewat inline style dari JS. */
+.overlay {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    z-index: 400;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: max(0.75rem, env(safe-area-inset-top, 0px)) max(0.75rem, env(safe-area-inset-right, 0px)) max(0.75rem, env(safe-area-inset-bottom, 0px)) max(0.75rem, env(safe-area-inset-left, 0px));
+    background: rgba(2, 2, 10, 0.72);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    animation: ovIn 0.5s ease;
+    transition: background 0.9s ease, backdrop-filter 0.9s ease;
+}
+
+.overlayRise {
+    background: rgba(2, 2, 10, 0);
+    backdrop-filter: blur(0);
+    -webkit-backdrop-filter: blur(0);
+}
+
+@keyframes ovIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.box {
+    width: 100%;
+    max-width: 460px;
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: rgba(4, 4, 20, 0.97);
+    border: 1px solid #1a2d50;
+    border-radius: 20px;
+    box-shadow: 0 0 70px rgba(68, 102, 255, 0.14), 0 30px 70px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+    outline: none;
+    animation: boxIn 0.5s cubic-bezier(0.34, 1.3, 0.64, 1);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.boxOut {
+    opacity: 0;
+    transform: scale(0.96) translateY(10px);
+    pointer-events: none;
+}
+
+@keyframes boxIn {
+    from {
+        opacity: 0;
+        transform: translateY(24px) scale(0.96);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* ── Header ── */
+.header {
+    flex-shrink: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.1rem 1rem 0.6rem 1.35rem;
+}
+
+.eyebrow {
+    font-family: var(--font-body);
+    font-size: 0.62rem;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: #aaccff;
+    margin-bottom: 0.25rem;
+}
+
+.title {
+    font-family: var(--font-display);
+    font-weight: 300;
+    font-size: 1.6rem;
+    line-height: 1.1;
+    color: var(--star-white);
+}
+
+.title em {
+    font-style: italic;
+    color: #cfe0ff;
+}
+
+.close {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(0, 0, 0, 0.45);
+    color: #fff;
+    font-size: 1rem;
+    transition: background 0.3s, border-color 0.3s;
+}
+
+.close:hover:not(:disabled),
+.close:focus-visible {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: #fff;
+    outline: none;
+}
+
+.close:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* ── Form: body scroll di dalam, footer tetap terlihat ── */
+.form {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.25rem 1.35rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+}
+
+.footer {
+    flex-shrink: 0;
+    padding: 0.8rem 1.35rem 1rem;
+    border-top: 1px solid rgba(136, 170, 255, 0.15);
+    background: rgba(4, 4, 20, 0.98);
+}
+
+.notice {
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    line-height: 1.65;
+    color: #a9bbe3;
+    padding: 0.8rem 0.9rem;
+    background: rgba(85, 119, 255, 0.08);
+    border: 1px solid rgba(136, 170, 255, 0.22);
+    border-radius: 12px;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.fieldset {
+    border: 0;
+    padding: 0;
+    margin: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    outline: none;
+}
+
+.label {
+    font-family: var(--font-body);
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    color: #cfe0ff;
+    padding: 0;
+}
+
+.opt {
+    margin-left: 0.4rem;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    color: #7f93bd;
+    text-transform: uppercase;
+}
+
+/* font-size 16px agar iOS tidak zoom saat fokus */
+.input {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 10px;
+    padding: 0.8rem 0.9rem;
+    color: #fff;
+    font-family: var(--font-body);
+    font-size: 1rem;
+    font-weight: 300;
+    outline: none;
+    transition: border-color 0.3s;
+}
+
+.input::placeholder {
+    color: #6f82ab;
+}
+
+.input:focus {
+    border-color: #88aacc;
+}
+
+.input:disabled {
+    color: #aabbee;
+    opacity: 0.8;
+}
+
+.textarea {
+    resize: none;
+    line-height: 1.6;
+    min-height: 110px;
+}
+
+.invalid {
+    border-color: #ff8fb1;
+}
+
+.metaRow {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.counter {
+    font-family: var(--font-body);
+    font-size: 0.72rem;
+    color: #7f93bd;
+}
+
+.counterNear {
+    color: #ffd27a;
+}
+
+.hintSmall {
+    font-family: var(--font-body);
+    font-size: 0.74rem;
+    color: #8fa0c8;
+}
+
+.error {
+    font-family: var(--font-body);
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: #ffa9c2;
+}
+
+.serverError {
+    margin-bottom: 0.6rem;
+}
+
+/* Input asli disembunyikan secara visual tapi tetap bisa difokus keyboard */
+.hiddenInput {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    pointer-events: none;
+}
+
+.srOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+/* ── Switch anonim ── */
+.switchRow {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.7rem;
+    min-height: 44px;
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    color: #dbe7ff;
+    cursor: pointer;
+    width: fit-content;
+}
+
+.switchTrack {
+    width: 44px;
+    height: 24px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    position: relative;
+    transition: background 0.3s, border-color 0.3s;
+    flex-shrink: 0;
+}
+
+.switchThumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.3s;
+}
+
+.switchRow input:checked+.switchTrack {
+    background: rgba(136, 85, 255, 0.55);
+    border-color: #aa88ff;
+}
+
+.switchRow input:checked+.switchTrack .switchThumb {
+    transform: translateX(20px);
+}
+
+.switchRow input:focus-visible+.switchTrack {
+    outline: 2px solid #aaccff;
+    outline-offset: 3px;
+}
+
+/* ── Chip kategori ── */
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.chip {
+    position: relative;
+    cursor: pointer;
+}
+
+.chipText {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0.4rem 1rem;
+    border-radius: 50px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    color: #a9bbe3;
+    transition: all 0.25s;
+}
+
+.chip input:checked+.chipText {
+    background: rgba(120, 80, 200, 0.28);
+    border-color: #8855ff;
+    color: #fff;
+}
+
+.chip input:focus-visible+.chipText {
+    outline: 2px solid #aaccff;
+    outline-offset: 2px;
+}
+
+/* ── Rating bintang ── */
+.stars {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.1rem;
+}
+
+.star {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    font-size: 2rem;
+    line-height: 1;
+    color: rgba(255, 255, 255, 0.22);
+    cursor: pointer;
+    transition: color 0.2s, transform 0.2s, text-shadow 0.2s;
+}
+
+.starOn {
+    color: #ffdd55;
+    text-shadow: 0 0 14px rgba(255, 221, 85, 0.55);
+}
+
+.star:active {
+    transform: scale(1.15);
+}
+
+.star input:focus-visible~span[aria-hidden] {
+    outline: 2px solid #aaccff;
+    outline-offset: 4px;
+    border-radius: 6px;
+}
+
+.ratingWord {
+    margin-left: 0.5rem;
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 1.05rem;
+    color: #cfe0ff;
+}
+
+/* ── Checkbox ── */
+.check {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    min-height: 44px;
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: #dbe7ff;
+    cursor: pointer;
+}
+
+.checkBox {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    margin-top: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: transparent;
+    font-size: 0.8rem;
+    transition: all 0.25s;
+}
+
+.check input:checked+.checkBox {
+    background: rgba(136, 85, 255, 0.6);
+    border-color: #aa88ff;
+    color: #fff;
+}
+
+.check input:focus-visible+.checkBox {
+    outline: 2px solid #aaccff;
+    outline-offset: 3px;
+}
+
+.checkBoxInvalid {
+    border-color: #ff8fb1;
+}
+
+.checkSmall {
+    display: block;
+    font-size: 0.72rem;
+    color: #8fa0c8;
+}
+
+/* Honeypot: di luar layar, bukan display:none */
+.hp {
+    position: absolute;
+    left: -9999px;
+    top: auto;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
+
+/* ── Tombol kirim ── */
+.submit {
+    width: 100%;
+    min-height: 48px;
+    padding: 0.85rem 1rem;
+    border-radius: 12px;
+    background: #fff;
+    color: #000;
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 0.9rem;
+    letter-spacing: 0.1em;
+    transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+}
+
+.submit:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(255, 255, 255, 0.2);
+}
+
+.submit:focus-visible {
+    outline: 2px solid #aaccff;
+    outline-offset: 3px;
+}
+
+.submit:disabled {
+    opacity: 0.65;
+    cursor: progress;
+}
+
+/* ── Bintang permintaan naik ── */
+.rise {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.riseStar {
+    font-size: 3.2rem;
+    color: #fff;
+    text-shadow: 0 0 24px rgba(170, 200, 255, 0.95), 0 0 60px rgba(136, 170, 255, 0.7);
+    animation: starRise 2.7s cubic-bezier(0.45, 0.05, 0.55, 0.95) forwards;
+}
+
+.riseText {
+    margin-top: 1rem;
+    padding: 0 1.5rem;
+    text-align: center;
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 1.25rem;
+    color: #cfe0ff;
+    opacity: 0;
+    animation: riseText 2.7s ease forwards;
+}
+
+@keyframes starRise {
+    0% {
+        opacity: 0;
+        transform: translateY(40px) scale(0.5);
+    }
+
+    18% {
+        opacity: 1;
+        transform: translateY(0) scale(1.25);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateY(-62vh) scale(0.35);
+    }
+}
+
+@keyframes riseText {
+    0% {
+        opacity: 0;
+    }
+
+    25% {
+        opacity: 1;
+    }
+
+    70% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+    }
+}
+
+@media (max-width: 400px) {
+    .title {
+        font-size: 1.4rem;
+    }
+
+    .body {
+        padding-left: 1.1rem;
+        padding-right: 1.1rem;
+    }
+
+    .footer {
+        padding-left: 1.1rem;
+        padding-right: 1.1rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .overlay,
+    .box,
+    .overlayRise {
+        animation: none;
+        transition: none;
+    }
+
+    .riseStar {
+        animation: starFade 1.4s ease forwards;
+    }
+
+    .riseText {
+        animation-duration: 1.4s;
+    }
+
+    .star,
+    .switchThumb,
+    .switchTrack,
+    .chipText,
+    .checkBox {
+        transition: none;
+    }
+}
+
+@keyframes starFade {
+    0% {
+        opacity: 0;
+    }
+
+    30% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+    }
+}
+===== END FILE =====
+
+===== FILE: src/index.css =====
+/* ============================================================
+   COSMIC JOURNEY — Global Styles (Fase 8: token keterbacaan)
+   ============================================================ */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-body: 'Outfit', system-ui, sans-serif;
+
+  /* ── Latar ── */
+  --void: #02021a;
+  --deep: #05051f;
+  --nebula-dark: #080824;
+  --blue-dim: #0e1e42;
+  --blue-mid: #1e3566;
+
+  /* ── Token warna teks (Fase 8) ──
+     Rasio kontras di atas --void (#02021a), perkiraan:
+       primary   #f0f4ff  ≈ 18:1
+       secondary #c3cfea  ≈ 13:1
+       muted     #9fb0d4  ≈ 9.5:1  (LANTAI: jangan dibuat lebih redup)
+     Di atas biru tengah (#1e3566) muted masih ≈ 5.5:1. */
+  --text-primary: #f0f4ff;
+  --text-secondary: #c3cfea;
+  --text-muted: #9fb0d4;
+
+  /* Aksen untuk TEKS (kontras ≥ 4.5:1 di atas --void) */
+  --accent-blue: #5577ff;
+  --accent-purple: #9955ff;
+  --accent-pink: #ff55bb;
+  --accent-gold: #ffdd55;
+  --accent-teal: #55ffdd;
+  --accent-blue-text: #99bbff;
+  --accent-purple-text: #cc99ff;
+  --accent-pink-text: #ff99dd;
+
+  /* Alias nama lama → token baru. Section yang masih memakai
+     var(--star-*) otomatis ikut terangkat ke lantai kontras. */
+  --star-white: var(--text-primary);
+  --star-dim: var(--text-secondary);
+  --star-muted: var(--text-muted);
+
+  /* ── Skala ukuran ── */
+  --fs-display: clamp(2.75rem, 9vw, 5.5rem);
+  --fs-title: clamp(1.75rem, 5vw, 3rem);
+  --fs-subtitle: clamp(1.25rem, 3.2vw, 1.75rem);
+  --fs-body-lg: 1.125rem;
+  --fs-body: 1rem;
+  --fs-label: 0.8125rem;
+  --fs-small: 0.75rem;
+  /* batas bawah teks kecil */
+
+  /* ── Weight ── */
+  --fw-display: 300;
+  /* hanya untuk font display besar */
+  --fw-regular: 400;
+  /* teks kecil dan isi */
+  --fw-medium: 500;
+
+  /* ── Ritme baca ── */
+  --lh-tight: 1.15;
+  --lh-body: 1.75;
+  --measure: 62ch;
+  /* lebar baris paragraf (target 45–70 karakter) */
+  --ls-label: 0.2em;
+  /* letter-spacing label kapital (lebih longgar dari 0.35em lama) */
+
+  /* ── Text-shadow gelap berlapis tipis (BUKAN glow warna), untuk teks di atas bintang ── */
+  --text-shadow-soft:
+    0 1px 2px rgba(1, 1, 12, 0.8),
+    0 0 10px rgba(1, 1, 12, 0.55);
+  --text-shadow-strong:
+    0 1px 2px rgba(1, 1, 12, 0.9),
+    0 2px 8px rgba(1, 1, 12, 0.7),
+    0 0 22px rgba(1, 1, 12, 0.5);
+
+  --glow-blue: rgba(85, 119, 255, 0.35);
+  --glow-purple: rgba(153, 85, 255, 0.30);
+  --glow-pink: rgba(255, 85, 187, 0.30);
+}
+
+/* Hook mode Comfort (UI-nya Fase 12): App menambah class ini ke <body>.
+   Menaikkan kontras teks; depth starfield diatur terpisah di App. */
+body.comfort-mode {
+  --text-secondary: #d6dff3;
+  --text-muted: #b6c4e4;
+}
+
+html,
+body {
+  font-size: 16px;
+  background: var(--void);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-weight: 300;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  /* address bar HP: tinggi mengikuti layar yang benar-benar terlihat */
+  /* MENGUNCI SCROLL GLOBAL & INPUT MOUSE WHEEL/SWIPE */
+  overflow: hidden;
+  cursor: crosshair;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--void);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--blue-mid);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-blue);
+}
+
+::selection {
+  background: var(--glow-blue);
+  color: var(--text-primary);
+}
+
+/* WRAPPER SECTION PENGGANTI MAIN SCROLL */
+.section-wrapper {
+  position: relative;
+  z-index: 1;
+  /* Mengatur layer konten di atas StarField (zIndex: 0) */
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: opacity 0.4s ease-in-out;
+}
+
+.section-wrapper.hidden {
+  opacity: 0;
+}
+
+.section-wrapper.visible {
+  opacity: 1;
+}
+
+/* Transisi gelap-terang antar-section (selain intro → solar) */
+.fade-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--void);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.fade-overlay.fade-dark {
+  opacity: 1;
+  pointer-events: auto;
+  /* cegah klik selama transisi */
+  transition: opacity var(--fade-out) ease-in;
+}
+
+.fade-overlay.fade-light {
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity var(--fade-in) ease-out;
+}
+
+.cosmic-section {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  /* sebelumnya hanya 100vh: lebih tinggi dari layar saat address bar HP tampil */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 5rem 2rem;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* Ending punya min-height: 100vh sendiri di modulnya; id menang atas class modul */
+#ending {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Typography (kelas global memakai token; ukuran label naik dari 0.7rem ke 0.75rem+) */
+.t-label {
+  font-family: var(--font-body);
+  font-size: var(--fs-label);
+  font-weight: var(--fw-regular);
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.t-heading {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  line-height: var(--lh-tight);
+  color: var(--text-primary);
+}
+
+.t-body {
+  font-family: var(--font-body);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-body);
+  color: var(--text-secondary);
+}
+
+.glow-blue {
+  text-shadow: 0 0 30px var(--glow-blue);
+  color: var(--accent-blue-text);
+}
+
+.glow-purple {
+  text-shadow: 0 0 30px var(--glow-purple);
+  color: var(--accent-purple-text);
+}
+
+.glow-pink {
+  text-shadow: 0 0 30px var(--glow-pink);
+  color: var(--accent-pink-text);
+}
+
+button {
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-weight: 300;
+  letter-spacing: 0.1em;
+  border: none;
+  background: none;
+  color: inherit;
+}
+
+/* Cadangan indikator fokus keyboard untuk tombol lama yang belum punya.
+   Tombol dengan :focus-visible sendiri (spesifisitas lebih tinggi) tidak terpengaruh. */
+button:focus-visible {
+  outline: 2px solid #aaccff;
+  outline-offset: 3px;
+}
+
+.noise-overlay {
+  position: absolute;
+  inset: 0;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 1;
+}
+
+@media (max-width: 768px) {
+  .cosmic-section {
+    padding: 4rem 1.25rem;
+  }
+}
+
+body.hide-global-ui nav,
+body.hide-global-ui div[class*="player"],
+body.hide-global-ui button[class*="showBtn"] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.5s ease !important;
+}
+
+/* ── Reduced motion: transisi global dan animasi dekoratif Ending ──
+   (Ending.module.css tidak diubah; class modul dipilih lewat potongan nama,
+   pola yang sama dengan aturan hide-global-ui di atas.) */
+@media (prefers-reduced-motion: reduce) {
+  .section-wrapper {
+    transition-duration: 0.2s;
+  }
+
+  [class*="btnStar"],
+  [class*="heartNova"],
+  [class*="nextBtn"] {
+    animation: none !important;
+  }
+
+  /* Ledakan hati dekoratif dimatikan sepenuhnya; bintang latar tampil statis */
+  [class*="heartNova"] {
+    display: none !important;
+  }
+
+  [class*="modalStar"] {
+    animation: none !important;
+    opacity: 0.7;
+    transform: none;
+  }
+
+  [class*="recordRing"] {
+    transition: none !important;
+  }
+}
+===== END FILE =====
+
+===== FILE: src/sections/Ending.jsx =====
+import { useState, useEffect, useMemo, memo } from 'react'
+import { sfx } from '../hooks/useSfx.js'
+import styles from './Ending.module.css'
+
+// ── DATA PESAN SEMESTA ───────────────────────────────────────────────
+const COSMIC_MESSAGES = [
+  "You are made of starstuff. Your potential is as limitless as the expanding universe.",
+  "Even the brightest stars burn out, but their light travels forever. Leave your light.",
+  "In the grand cosmic dance, your existence is a beautiful statistical impossibility. Cherish it.",
+  "Do not fear the void. It is the canvas upon which your light shines the brightest.",
+  "Time is relative, but your impact is absolute. The cosmos remembers you."
+]
+
+const ALPHABET_POINTS = {
+  A: [[20, 90], [50, 10], [80, 90], [65, 50], [35, 50]],
+  B: [[20, 10], [20, 90], [20, 50], [60, 50], [70, 70], [60, 90], [20, 90], [20, 10], [60, 10], [70, 30], [60, 50]],
+  C: [[80, 20], [60, 10], [30, 20], [20, 50], [30, 80], [60, 90], [80, 80]],
+  D: [[20, 10], [20, 90], [50, 90], [70, 70], [70, 30], [50, 10], [20, 10]],
+  E: [[80, 10], [20, 10], [20, 50], [60, 50], [20, 50], [20, 90], [80, 90]],
+  F: [[80, 10], [20, 10], [20, 50], [60, 50], [20, 50], [20, 90]],
+  G: [[80, 20], [60, 10], [30, 20], [20, 50], [30, 80], [60, 90], [80, 80], [80, 50], [50, 50]],
+  H: [[20, 10], [20, 90], [20, 50], [80, 50], [80, 10], [80, 90]],
+  I: [[30, 10], [70, 10], [50, 10], [50, 90], [30, 90], [70, 90]],
+  J: [[20, 70], [40, 90], [60, 90], [80, 70], [80, 10]],
+  K: [[20, 10], [20, 90], [20, 50], [80, 10], [20, 50], [80, 90]],
+  L: [[20, 10], [20, 90], [80, 90]],
+  M: [[20, 90], [20, 10], [50, 50], [80, 10], [80, 90]],
+  N: [[20, 90], [20, 10], [80, 90], [80, 10]],
+  O: [[50, 10], [20, 30], [20, 70], [50, 90], [80, 70], [80, 30], [50, 10]],
+  P: [[20, 90], [20, 10], [60, 10], [80, 30], [60, 50], [20, 50]],
+  Q: [[50, 10], [20, 30], [20, 70], [50, 90], [80, 70], [80, 30], [50, 10], [70, 70], [90, 90]],
+  R: [[20, 90], [20, 10], [60, 10], [80, 30], [60, 50], [20, 50], [50, 50], [80, 90]],
+  S: [[80, 20], [50, 10], [20, 30], [50, 50], [80, 70], [50, 90], [20, 80]],
+  T: [[10, 10], [90, 10], [50, 10], [50, 90]],
+  U: [[20, 10], [20, 70], [40, 90], [60, 90], [80, 70], [80, 10]],
+  V: [[20, 10], [50, 90], [80, 10]],
+  W: [[10, 10], [30, 90], [50, 50], [70, 90], [90, 10]],
+  X: [[20, 10], [80, 90], [50, 50], [80, 10], [20, 90]],
+  Y: [[20, 10], [50, 50], [80, 10], [50, 50], [50, 90]],
+  Z: [[20, 10], [80, 10], [20, 90], [80, 90]]
+}
+
+// Bangun titik rasi bintang dari huruf pertama nama (dipakai tampilan + kartu share)
+function makeConstellation(name) {
+  let char = name.trim().charAt(0).toUpperCase()
+  if (!ALPHABET_POINTS[char]) char = 'O'
+  return ALPHABET_POINTS[char].map(([x, y]) => ({
+    x: 90 + x * 1.2 + (Math.random() - 0.5) * 8,
+    y: 20 + y * 1.2 + (Math.random() - 0.5) * 8,
+  }))
+}
+
+function LetterConstellation({ name, points }) {
+  return (
+    <div className={styles.constellationWrap}>
+      <svg viewBox="0 0 300 160" className={styles.constellationSvg}>
+        {points.map((p, i) => {
+          const next = points[i + 1]
+          return next ? (
+            <line key={`line-${i}`} x1={p.x} y1={p.y} x2={next.x} y2={next.y} stroke="rgba(136, 170, 255, 0.4)" strokeWidth="1.5" strokeDasharray="4 4" />
+          ) : null
+        })}
+        {points.map((p, i) => (
+          <g key={`star-${i}`}>
+            <circle cx={p.x} cy={p.y} r="4" fill="#ffffff" filter="drop-shadow(0 0 6px rgba(136, 170, 255, 0.8))" />
+            <circle cx={p.x} cy={p.y} r="1.5" fill="#fff" />
+          </g>
+        ))}
+      </svg>
+      <p className={styles.constellationLabel}>Constellation {name}</p>
+    </div>
+  )
+}
+
+// ── SHARE CARD: render konstelasi + pesan ke PNG 1080×1350 ─────────────
+function wrapLines(g, text, maxWidth) {
+  const words = text.split(' ')
+  const lines = []
+  let line = ''
+  for (const w of words) {
+    const test = line ? `${line} ${w}` : w
+    if (g.measureText(test).width > maxWidth && line) {
+      lines.push(line)
+      line = w
+    } else {
+      line = test
+    }
+  }
+  if (line) lines.push(line)
+  return lines
+}
+
+async function drawShareCard({ name, from, message, points, coords }) {
+  try {
+    await Promise.all([
+      document.fonts.load('italic 300 60px "Cormorant Garamond"'),
+      document.fonts.load('300 24px "Outfit"'),
+    ])
+  } catch (_) { /* font fallback */ }
+
+  const W = 1080, H = 1350
+  const canvas = document.createElement('canvas')
+  canvas.width = W
+  canvas.height = H
+  const g = canvas.getContext('2d')
+  const serif = '"Cormorant Garamond", Georgia, serif'
+  const sans = '"Outfit", system-ui, sans-serif'
+  const setSpacing = (px) => { if ('letterSpacing' in g) g.letterSpacing = `${px}px` }
+
+  // background
+  const bg = g.createLinearGradient(0, 0, 0, H)
+  bg.addColorStop(0, '#02021a')
+  bg.addColorStop(0.55, '#0b0720')
+  bg.addColorStop(1, '#16091f')
+  g.fillStyle = bg
+  g.fillRect(0, 0, W, H)
+
+  // soft nebula washes
+  const wash = (x, y, r, color) => {
+    const rg = g.createRadialGradient(x, y, 0, x, y, r)
+    rg.addColorStop(0, color)
+    rg.addColorStop(1, 'rgba(0,0,0,0)')
+    g.fillStyle = rg
+    g.fillRect(0, 0, W, H)
+  }
+  wash(220, 260, 520, 'rgba(80,110,255,0.16)')
+  wash(900, 1050, 560, 'rgba(160,80,255,0.14)')
+
+  // star dust
+  for (let i = 0; i < 320; i++) {
+    const r = Math.random() * 1.6 + 0.3
+    g.fillStyle = `rgba(210,225,255,${Math.random() * 0.7 + 0.15})`
+    g.beginPath()
+    g.arc(Math.random() * W, Math.random() * H, r, 0, Math.PI * 2)
+    g.fill()
+  }
+
+  // frame
+  g.strokeStyle = 'rgba(136,170,255,0.25)'
+  g.lineWidth = 2
+  g.beginPath()
+  g.roundRect ? g.roundRect(40, 40, W - 80, H - 80, 28) : g.rect(40, 40, W - 80, H - 80)
+  g.stroke()
+
+  // constellation (fit into 520×340 area centred at y=330)
+  const xs = points.map((p) => p.x), ys = points.map((p) => p.y)
+  const minX = Math.min(...xs), maxX = Math.max(...xs)
+  const minY = Math.min(...ys), maxY = Math.max(...ys)
+  const scale = Math.min(520 / ((maxX - minX) || 1), 340 / ((maxY - minY) || 1))
+  const pts = points.map((p) => ({
+    x: W / 2 + (p.x - (minX + maxX) / 2) * scale,
+    y: 330 + (p.y - (minY + maxY) / 2) * scale,
+  }))
+
+  g.strokeStyle = 'rgba(136,170,255,0.55)'
+  g.lineWidth = 2.5
+  g.setLineDash([10, 10])
+  g.beginPath()
+  pts.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)))
+  g.stroke()
+  g.setLineDash([])
+
+  pts.forEach((p) => {
+    const halo = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, 30)
+    halo.addColorStop(0, 'rgba(160,190,255,0.85)')
+    halo.addColorStop(1, 'rgba(160,190,255,0)')
+    g.fillStyle = halo
+    g.fillRect(p.x - 30, p.y - 30, 60, 60)
+    g.fillStyle = '#fff'
+    g.beginPath()
+    g.arc(p.x, p.y, 7, 0, Math.PI * 2)
+    g.fill()
+  })
+
+  g.textAlign = 'center'
+
+  // label under constellation
+  g.fillStyle = '#88aacc'
+  g.font = `300 22px ${sans}`
+  setSpacing(6)
+  g.fillText(`CONSTELLATION ${name.toUpperCase()}`, W / 2, 560)
+
+  // divider
+  g.strokeStyle = 'rgba(255,255,255,0.12)'
+  g.lineWidth = 1
+  g.beginPath()
+  g.moveTo(160, 600)
+  g.lineTo(W - 160, 600)
+  g.stroke()
+
+  // header
+  g.fillStyle = '#88aacc'
+  g.font = `300 20px ${sans}`
+  setSpacing(5)
+  g.fillText('DECRYPTED TRANSMISSION', W / 2, 668)
+  setSpacing(0)
+
+  // "Dear Name,"  — shrink to fit
+  let size = 70
+  g.fillStyle = '#aaccff'
+  do {
+    g.font = `italic 300 ${size}px ${serif}`
+    size -= 4
+  } while (g.measureText(`Dear ${name},`).width > 880 && size > 30)
+  g.fillText(`Dear ${name},`, W / 2, 770)
+
+  // message
+  // shrink the font until the message fits above the signature/footer
+  g.fillStyle = '#e0e5ff'
+  let msgSize = 54
+  let lines = []
+  while (true) {
+    g.font = `italic 300 ${msgSize}px ${serif}`
+    lines = wrapLines(g, `“${message}”`, 840)
+    if (lines.length * msgSize * 1.45 <= 270 || msgSize <= 32) break
+    msgSize -= 2
+  }
+  const lh = msgSize * 1.45
+  lines.forEach((ln, i) => g.fillText(ln, W / 2, 870 + i * lh))
+
+  // signature (for "someone else")
+  if (from) {
+    const sigY = Math.min(870 + (lines.length - 1) * lh + 105, 1185)
+    g.fillStyle = '#8596aa'
+    g.font = `300 20px ${sans}`
+    setSpacing(3)
+    g.fillText('WITH COSMIC LOVE,', W / 2, sigY - 44)
+    setSpacing(0)
+    let sigSize = 56
+    g.fillStyle = '#ff99cc'
+    do {
+      g.font = `italic 300 ${sigSize}px ${serif}`
+      sigSize -= 4
+    } while (g.measureText(from).width > 700 && sigSize > 28)
+    g.fillText(from, W / 2, sigY + 8)
+  }
+
+  // footer
+  g.fillStyle = '#8596aa'
+  g.font = `300 20px ${sans}`
+  setSpacing(4)
+  g.fillText('COSMIC JOURNEY', W / 2, H - 110)
+  g.font = `300 17px ${sans}`
+  setSpacing(2)
+  g.fillText(`COSMIC COORDS: ${coords}`, W / 2, H - 76)
+  setSpacing(0)
+
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
+}
+
+// ── KOMPONEN BINTANG GEMERLAP (BACKGROUND KARTU) ──────────────────────
+function ModalStars() {
+  const stars = useMemo(() => Array.from({ length: 60 }).map(() => ({
+    x: Math.random() * 100,
+    y: Math.random() * 100,
+    size: Math.random() * 2 + 1,
+    delay: Math.random() * 4,
+    duration: Math.random() * 2 + 2
+  })), [])
+
+  return (
+    <div className={styles.modalStarsWrap}>
+      {stars.map((s, i) => (
+        <div key={i} className={styles.modalStar} style={{
+          left: `${s.x}%`, top: `${s.y}%`,
+          width: `${s.size}px`, height: `${s.size}px`,
+          animationDelay: `${s.delay}s`,
+          animationDuration: `${s.duration}s`
+        }} />
+      ))}
+    </div>
+  )
+}
+
+// ── KOMPONEN HEART SUPERNOVA (LEDAKAN HATI RANDOM) ────────────────────
+function HeartSupernovas() {
+  const [novas, setNovas] = useState([])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNovas((prev) => {
+        const newNova = {
+          id: Date.now() + Math.random(),
+          x: Math.random() * 100,
+          y: Math.random() * 100,
+          scale: Math.random() * 1.5 + 1.5, // Skala acak
+          color: ['#ff99cc', '#ffb3e6', '#e6ccff', '#ffccff', '#ffd700'][Math.floor(Math.random() * 5)]
+        }
+        return [...prev.slice(-4), newNova] // Maksimal 5 ledakan di DOM
+      })
+    }, 1800) // Meledak setiap 1.8 detik
+
+    return () => clearInterval(interval)
+  }, [])
+
+  return (
+    <div className={styles.heartNovaWrap}>
+      {novas.map((nova) => (
+        <div key={nova.id} className={styles.heartNova} style={{
+          left: `${nova.x}%`, top: `${nova.y}%`,
+          '--nova-scale': nova.scale,
+          '--nova-color': nova.color
+        }}>
+          {/* SVG Hati */}
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+          </svg>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── KOMPONEN UTAMA ENDING ─────────────────────────────────────────────
+function Ending({ visitor, onReveal, onNext, onBackToChoices, resumeMessage = false }) {
+  const { name: recipient, sender, constellationPoints: constellation, finalMessage, coords, wishSubmitted } = visitor
+  const isOther = Boolean(sender)
+  const hasMessage = Boolean(finalMessage)
+  // Wish sudah terkirim (datang dari Secret Ending) → tombol utama kembali ke pilihan, bukan mengulang Wishing
+  const canGoBackToChoices = Boolean(wishSubmitted && onBackToChoices)
+
+  const [isHovered, setIsHovered] = useState(false)
+  // Kembali dari Secret Ending ("Stay with my constellation") → langsung buka pesan lagi
+  const [modalState, setModalState] = useState(resumeMessage && hasMessage ? 'message' : 'closed')
+  const [formData, setFormData] = useState({ type: 'self', name: '', from: '', to: '', note: '' })
+  const [sharing, setSharing] = useState(false)
+
+  const handleOpenForm = () => {
+    sfx.open()
+    setModalState('form')
+    setFormData({ type: 'self', name: '', from: '', to: '', note: '' })
+  }
+
+  const handleReveal = (e) => {
+    e.preventDefault()
+
+    let name = ''
+    let from = ''
+    let message = ''
+    if (formData.type === 'self') {
+      name = formData.name.trim()
+      if (!name) return
+      message = COSMIC_MESSAGES[Math.floor(Math.random() * COSMIC_MESSAGES.length)]
+    } else {
+      name = formData.to.trim()
+      from = formData.from.trim()
+      if (!name || !from) return
+      message = formData.note.trim() || COSMIC_MESSAGES[Math.floor(Math.random() * COSMIC_MESSAGES.length)]
+    }
+
+    // Data pengunjung disimpan di App (state in-memory, tanpa localStorage)
+    onReveal({
+      name,
+      sender: from,
+      finalMessage: message,
+      constellationPoints: makeConstellation(name),
+      coords: `${Math.random().toFixed(4)} N, ${Math.random().toFixed(4)} W`,
+    })
+    sfx.reveal()
+    setModalState('message')
+  }
+
+  // X / Esc pada pesan: hanya menutup pesan (tombol lanjut muncul di halaman)
+  const handleCloseMessage = () => {
+    sfx.click()
+    setModalState('closed')
+  }
+
+  const handleShareCard = async () => {
+    if (sharing) return
+    setSharing(true)
+    sfx.click()
+    try {
+      const blob = await drawShareCard({ name: recipient, from: sender, message: finalMessage, points: constellation, coords })
+      if (!blob) return
+      const safe = recipient.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'cosmic'
+      const file = new File([blob], `constellation-${safe}.png`, { type: 'image/png' })
+
+      // Mobile: native share sheet. Desktop / unsupported: download.
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: 'A message from the universe' })
+          return
+        } catch (err) {
+          if (err && err.name === 'AbortError') return
+        }
+      }
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = file.name
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } finally {
+      setSharing(false)
+    }
+  }
+
+  // Esc: tutup form / tutup pesan saja
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return
+      if (modalState === 'form') setModalState('closed')
+      else if (modalState === 'message') setModalState('closed')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [modalState])
+
+  return (
+    <section id="ending" className={`cosmic-section ${styles.ending}`}>
+      <div className={styles.bgGradient} />
+      <div className="noise-overlay" />
+
+      <div className={styles.eclipseContainer}>
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div
+            key={i}
+            className={`${styles.recordRing} ${isHovered ? styles.ringActive : ''}`}
+            style={{ '--i': i }}
+          />
+        ))}
+        <div className={styles.eclipseCore} />
+      </div>
+
+      <div className={styles.content}>
+        <p className="t-label" style={{ marginBottom: '1.5rem', color: '#aaccff' }}>
+          Final Transmission
+        </p>
+
+        <h2 className={styles.title}>
+          The Universe<br />
+          <em>has a message for you</em>
+        </h2>
+
+        <p className={styles.sub}>
+          You have traveled 13.8 billion years of cosmic history.<br />
+          You have witnessed the birth and death of stars.<br />
+          Now — receive what the cosmos wishes to say.
+        </p>
+
+        <button
+          className={styles.messageBtn}
+          onClick={handleOpenForm}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          <span className={styles.btnStar}>✦</span>
+          Receive your message
+          <span className={styles.btnStar}>✦</span>
+        </button>
+
+        {hasMessage && modalState === 'closed' && (
+          canGoBackToChoices ? (
+            <button className={styles.nextBtn} onClick={() => { sfx.click(); onBackToChoices() }}>
+              Back to choices ✦
+            </button>
+          ) : (
+            <button className={styles.nextBtn} onClick={() => { sfx.click(); onNext?.() }}>
+              Next: Make a Wish ✦
+            </button>
+          )
+        )}
+
+        <p className={styles.footer}>
+          Every journey through the cosmos begins and ends at home.
+        </p>
+      </div>
+
+      <div className={`${styles.modalOverlay} ${modalState !== 'closed' ? styles.modalOpen : ''}`}>
+
+        {/* Latar Belakang Khusus Saat Pesan Muncul (Gemerlap & Supernova) */}
+        {modalState === 'message' && (
+          <>
+            <ModalStars />
+            <HeartSupernovas />
+          </>
+        )}
+
+        {modalState === 'form' && (
+          <div className={styles.modalBox}>
+            <button className={styles.closeBtn} onClick={() => setModalState('closed')} aria-label="Close form">✕</button>
+            <h3 className={styles.modalTitle}>Set Transmission Target</h3>
+
+            <form onSubmit={handleReveal} className={styles.formContainer}>
+              <div className={styles.radioGroup}>
+                <label className={formData.type === 'self' ? styles.radioActive : ''}>
+                  <input type="radio" name="type" checked={formData.type === 'self'} onChange={() => setFormData({ ...formData, type: 'self' })} />
+                  For Myself
+                </label>
+                <label className={formData.type === 'other' ? styles.radioActiveOther : ''}>
+                  <input type="radio" name="type" checked={formData.type === 'other'} onChange={() => setFormData({ ...formData, type: 'other' })} />
+                  For Someone Else ✨
+                </label>
+              </div>
+
+              {formData.type === 'self' ? (
+                <input
+                  type="text"
+                  placeholder="Enter your name..."
+                  className={styles.nameInput}
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  required
+                  maxLength={30}
+                />
+              ) : (
+                <div className={styles.validationBox}>
+                  <p className={styles.validationHint}>Who is this transmission from, and for whom? 💌</p>
+                  <input
+                    type="text"
+                    placeholder="From (your name)..."
+                    className={styles.nameInput}
+                    value={formData.from}
+                    onChange={(e) => setFormData({ ...formData, from: e.target.value })}
+                    required
+                    maxLength={30}
+                  />
+                  <input
+                    type="text"
+                    placeholder="To (their name)..."
+                    className={styles.nameInput}
+                    value={formData.to}
+                    onChange={(e) => setFormData({ ...formData, to: e.target.value })}
+                    required
+                    maxLength={30}
+                  />
+                  <textarea
+                    placeholder="Write your own message — or leave empty and let the universe write one"
+                    className={`${styles.nameInput} ${styles.noteInput}`}
+                    value={formData.note}
+                    onChange={(e) => setFormData({ ...formData, note: e.target.value })}
+                    rows={4}
+                    maxLength={240}
+                  />
+                </div>
+              )}
+
+              <button type="submit" className={styles.submitBtn}>Decode Message →</button>
+            </form>
+          </div>
+        )}
+
+        {modalState === 'message' && (
+          <div className={styles.ticketBox}>
+            <button className={styles.closeBtn} onClick={handleCloseMessage} aria-label="Close message">✕</button>
+
+            <div className={styles.ticketContent}>
+              <LetterConstellation name={recipient} points={constellation} />
+              <p className="t-label" style={{ color: '#88aacc', marginBottom: '10px' }}>DECRYPTED TRANSMISSION</p>
+              <h3 className={styles.recipientName}>
+                Dear <span className={styles.highlightName}>{recipient}</span>,
+              </h3>
+              <p className={styles.finalMessageText}>"{finalMessage}"</p>
+
+              {isOther && (
+                <div className={styles.signOff}>
+                  <p>With cosmic love,</p>
+                  <p className={styles.signature}>{sender}</p>
+                </div>
+              )}
+
+              <div className={styles.ticketFooter}>
+                <span>COSMIC COORDS: {coords}</span>
+                <span>STATUS: DELIVERED</span>
+              </div>
+              <button className={styles.shareBtn} onClick={handleShareCard} disabled={sharing}>
+                {sharing ? 'Rendering card…' : '✦ Save as card'}
+              </button>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </section>
+  )
+}
+
+export default memo(Ending)
+===== END FILE =====
+
+===== FILE: src/sections/Ending.module.css =====
+/* ... KODE CSS ANDA SEBELUMNYA TETAP SAMA ... */
+
+.ending {
+  background: rgba(4, 3, 15, 0.6);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bgGradient {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, transparent 20%, rgba(2, 1, 8, 0.95) 80%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.eclipseContainer {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 800px;
+  height: 800px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.eclipseCore {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 220px;
+  height: 220px;
+  background: #000000;
+  border-radius: 50%;
+  box-shadow:
+    0 0 80px 20px rgba(120, 60, 200, 0.8),
+    0 0 150px 60px rgba(100, 150, 255, 0.25),
+    inset 0 0 20px rgba(255, 255, 255, 0.1);
+}
+
+.recordRing {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(0deg);
+  border-radius: 50%;
+  border: 1px solid rgba(136, 170, 255, 0.15);
+  width: calc(240px + (var(--i) * 70px));
+  height: calc(240px + (var(--i) * 70px));
+  transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  transition-delay: calc(var(--i) * 0.1s);
+}
+
+.ringActive {
+  border-color: rgba(136, 170, 255, 0.6);
+  box-shadow: 0 0 20px rgba(136, 170, 255, 0.15), inset 0 0 20px rgba(136, 170, 255, 0.15);
+  transform: translate(-50%, -50%) rotate(180deg);
+}
+
+.content {
+  position: relative;
+  z-index: 10;
+  max-width: 600px;
+}
+
+.title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(2.5rem, 5vw, 4.5rem);
+  font-weight: 300;
+  color: #ffffff;
+  line-height: 1.15;
+  margin-bottom: 2rem;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 30px rgba(136, 170, 255, 0.3);
+}
+
+.title em {
+  font-style: italic;
+  color: #aaccff;
+  display: block;
+  font-size: 0.8em;
+}
+
+.sub {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.95rem;
+  color: #aabbee;
+  line-height: 2;
+  font-weight: 300;
+  margin-bottom: 3.5rem;
+}
+
+.messageBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 1rem;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(136, 170, 255, 0.4);
+  color: #aaccff;
+  padding: 1.2rem 3rem;
+  border-radius: 50px;
+  cursor: pointer;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 300;
+  letter-spacing: 0.15em;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 40px rgba(136, 170, 255, 0.15);
+  backdrop-filter: blur(10px);
+  margin-bottom: 3.5rem;
+  position: relative;
+  z-index: 50;
+}
+
+.messageBtn:hover {
+  border-color: rgba(136, 170, 255, 0.9);
+  background: rgba(136, 170, 255, 0.05);
+  box-shadow: 0 0 60px rgba(136, 170, 255, 0.4);
+  transform: scale(1.05);
+}
+
+.btnStar {
+  font-size: 0.7rem;
+  opacity: 0.6;
+  animation: starSpin 4s linear infinite;
+}
+
+.btnStar:last-child {
+  animation-direction: reverse;
+}
+
+@keyframes starSpin {
+  from {
+    transform: rotate(0deg);
+    opacity: 0.5;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  to {
+    transform: rotate(360deg);
+    opacity: 0.5;
+  }
+}
+
+.nextBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  margin: -1.5rem 0 3rem;
+  padding: 0.9rem 2.2rem;
+  background: linear-gradient(135deg, rgba(85, 119, 255, 0.28), rgba(153, 85, 255, 0.28));
+  border: 1px solid rgba(180, 200, 255, 0.55);
+  border-radius: 50px;
+  color: #eef2ff;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.9rem;
+  font-weight: 300;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  position: relative;
+  z-index: 50;
+  box-shadow: 0 0 36px rgba(136, 170, 255, 0.3);
+  transition: transform 0.4s ease, box-shadow 0.4s ease, border-color 0.4s ease;
+  animation: nextIn 0.9s ease both, nextPulse 3.2s ease-in-out 1s infinite;
+}
+
+.nextBtn:hover {
+  transform: scale(1.05);
+  border-color: #fff;
+  box-shadow: 0 0 56px rgba(160, 190, 255, 0.55);
+}
+
+.nextBtn:focus-visible {
+  outline: 2px solid #aaccff;
+  outline-offset: 3px;
+}
+
+@keyframes nextIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes nextPulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 28px rgba(136, 170, 255, 0.25);
+  }
+
+  50% {
+    box-shadow: 0 0 52px rgba(170, 130, 255, 0.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nextBtn {
+    animation: none;
+  }
+}
+
+.footer {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 0.95rem;
+  font-style: italic;
+  color: #8596aa;
+  letter-spacing: 0.06em;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 2, 8, 0.85);
+  backdrop-filter: blur(15px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 0.5s ease, visibility 0.5s ease;
+}
+
+.modalOpen {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.modalBox {
+  background: linear-gradient(135deg, rgba(20, 15, 35, 0.9), rgba(10, 5, 20, 0.95));
+  border: 1px solid rgba(120, 80, 200, 0.4);
+  padding: 3rem;
+  border-radius: 20px;
+  width: 90%;
+  max-width: 450px;
+  position: relative;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 40px rgba(120, 80, 200, 0.2);
+  z-index: 10;
+}
+
+.closeBtn {
+  position: absolute;
+  top: 1rem;
+  right: 1.5rem;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  z-index: 100;
+}
+
+.closeBtn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: #fff;
+  transform: scale(1.1);
+}
+
+.modalTitle {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 300;
+  color: #e0e5ff;
+  letter-spacing: 0.1em;
+  margin-bottom: 2rem;
+  font-size: 1.2rem;
+}
+
+.formContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.radioGroup {
+  display: flex;
+  gap: 1rem;
+}
+
+.radioGroup label {
+  flex: 1;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  cursor: pointer;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.85rem;
+  color: #8899aa;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.radioGroup input[type="radio"] {
+  display: none;
+}
+
+.radioGroup label.radioActive {
+  background: rgba(120, 80, 200, 0.2);
+  border-color: #8855ff;
+  color: #fff;
+}
+
+.radioGroup label.radioActiveOther {
+  background: rgba(255, 105, 180, 0.2);
+  border-color: #ff66cc;
+  color: #fff;
+  text-shadow: 0 0 10px rgba(255, 105, 180, 0.5);
+}
+
+.validationBox {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  animation: fadeIn 0.4s ease;
+}
+
+.validationHint {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.85rem;
+  color: #ff99cc;
+  margin-bottom: -0.5rem;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.nameInput {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 1.2rem;
+  border-radius: 10px;
+  color: #fff;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.2rem;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+.nameInput:focus {
+  border-color: #88aacc;
+}
+
+.submitBtn {
+  background: #fff;
+  color: #000;
+  border: none;
+  padding: 1rem;
+  border-radius: 10px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.submitBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(255, 255, 255, 0.2);
+}
+
+.ticketBox {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 10;
+  /* Pastikan kartu di atas bintang & ledakan */
+}
+
+.ticketContent {
+  background: linear-gradient(to bottom, #050508, #100b1a);
+  border: 1px solid rgba(136, 170, 255, 0.3);
+  padding: 3.5rem 2rem 2rem;
+  border-radius: 15px;
+  width: 90vw;
+  max-width: 500px;
+  max-height: 88vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 0 50px rgba(136, 170, 255, 0.1);
+}
+
+.constellationWrap {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 1rem;
+  margin-bottom: 2rem;
+}
+
+.constellationSvg {
+  width: 100%;
+  height: 120px;
+}
+
+.constellationLabel {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.75rem;
+  color: #88aacc;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-top: 0.5rem;
+}
+
+.recipientName {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 300;
+  color: #fff;
+  font-size: 1.2rem;
+  margin-bottom: 1.5rem;
+}
+
+.highlightName {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.8rem;
+  color: #aaccff;
+  font-style: italic;
+}
+
+.finalMessageText {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.4rem;
+  line-height: 1.6;
+  color: #e0e5ff;
+  font-weight: 300;
+  font-style: italic;
+  margin-bottom: 2rem;
+}
+
+.ticketFooter {
+  display: flex;
+  justify-content: space-between;
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: #8596aa;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+  padding-top: 1rem;
+}
+
+.signOff {
+  margin: -0.5rem 0 2rem;
+  font-family: 'Outfit', sans-serif;
+  color: #ccccff;
+  font-size: 0.9rem;
+  text-align: right;
+}
+
+.signature {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.8rem;
+  color: #ff99cc;
+  font-style: italic;
+  margin-top: 0.2rem;
+  word-break: break-word;
+}
+
+.noteInput {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  text-align: left;
+  resize: none;
+}
+
+.warpOverlay {
+  position: fixed;
+  inset: 0;
+  background: #000002;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 0.6s ease, visibility 0.6s ease;
+}
+
+.warpOpen {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.warpCanvasWrap {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.warpText {
+  position: relative;
+  z-index: 2;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(2.5rem, 5vw, 4.5rem);
+  font-weight: 300;
+  color: #ffffff;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  filter: blur(20px);
+  transform: scale(0.9);
+  animation: textBlurSequence 3s forwards;
+}
+
+@keyframes textBlurSequence {
+  0% {
+    opacity: 0;
+    filter: blur(20px);
+    transform: scale(0.9);
+  }
+
+  30% {
+    opacity: 1;
+    filter: blur(0px);
+    transform: scale(1);
+    text-shadow: 0 0 30px rgba(136, 170, 255, 0.5);
+  }
+
+  70% {
+    opacity: 1;
+    filter: blur(0px);
+    transform: scale(1);
+    text-shadow: 0 0 30px rgba(136, 170, 255, 0.5);
+  }
+
+  100% {
+    opacity: 0;
+    filter: blur(20px);
+    transform: scale(1.1);
+  }
+}
+
+/* ── KELAS UNTUK BINTANG GEMERLAP & HEART SUPERNOVA (Latar Belakang Modal) ── */
+.modalStarsWrap {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.modalStar {
+  position: absolute;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 0 10px 2px rgba(255, 255, 255, 0.8);
+  animation: twinkleModal linear infinite alternate;
+}
+
+@keyframes twinkleModal {
+  0% {
+    opacity: 0.1;
+    transform: scale(0.5);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1.3);
+  }
+}
+
+.heartNovaWrap {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.heartNova {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  color: #fff;
+  transform: translate(-50%, -50%) scale(0);
+  animation: heartNovaExplode 3s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+}
+
+.heartNova svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 5px var(--nova-color));
+}
+
+@keyframes heartNovaExplode {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 1;
+    color: #fff;
+    filter: drop-shadow(0 0 0 var(--nova-color));
+  }
+
+  20% {
+    opacity: 1;
+    color: #fff;
+    filter: drop-shadow(0 0 20px var(--nova-color)) drop-shadow(0 0 40px var(--nova-color));
+  }
+
+  100% {
+    transform: translate(-50%, -50%) scale(var(--nova-scale));
+    opacity: 0;
+    color: var(--nova-color);
+    filter: drop-shadow(0 0 60px var(--nova-color));
+  }
+}
+
+/* ── SHARE CARD BUTTON ── */
+.shareBtn {
+  margin-top: 1.5rem;
+  width: 100%;
+  background: rgba(136, 170, 255, 0.08);
+  border: 1px solid rgba(136, 170, 255, 0.45);
+  color: #cfe0ff;
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.85rem;
+  letter-spacing: 0.15em;
+  cursor: pointer;
+  transition: background 0.3s, box-shadow 0.3s, transform 0.2s;
+}
+
+.shareBtn:hover:not(:disabled) {
+  background: rgba(136, 170, 255, 0.18);
+  box-shadow: 0 0 24px rgba(136, 170, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.shareBtn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.shareBtn:focus-visible,
+.messageBtn:focus-visible,
+.submitBtn:focus-visible {
+  outline: 2px solid #aaccff;
+  outline-offset: 3px;
+}
+===== END FILE =====
+
+===== FILE: src/sections/Gallery.module.css =====
+/* Wrapper tetap 100dvh; section ini yang scroll di dalam dirinya sendiri */
+.gallery {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    padding: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+.sky {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.dot {
+    position: absolute;
+    border-radius: 50%;
+    background: #cfe0ff;
+    box-shadow: 0 0 6px 1px rgba(160, 190, 255, 0.7);
+    opacity: 0.25;
+    animation: twinkle 4s ease-in-out infinite;
+}
+
+@keyframes twinkle {
+
+    0%,
+    100% {
+        opacity: 0.15;
+        transform: scale(0.8);
+    }
+
+    50% {
+        opacity: 0.8;
+        transform: scale(1.3);
+    }
+}
+
+/* Ruang aman: kanan untuk NavDots. MusicPlayer ada di kanan ATAS (lihat media query di bawah). */
+.inner {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+    padding: 1rem 2.75rem calc(2rem + env(safe-area-inset-bottom, 0px)) 1.25rem;
+}
+
+.topBar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.head {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.label {
+    font-family: var(--font-body);
+    font-size: 0.7rem;
+    font-weight: 300;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: #aaccff;
+}
+
+.title {
+    font-family: var(--font-display);
+    font-weight: 300;
+    line-height: 1.1;
+    font-size: clamp(2rem, 7vw, 3.6rem);
+    color: var(--star-white);
+}
+
+.title em {
+    font-style: italic;
+    color: #cfe0ff;
+}
+
+.summary {
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    letter-spacing: 0.08em;
+    color: var(--accent-gold);
+    min-height: 1.3em;
+}
+
+/* Kontrol: ringkas (sort + satu baris chip yang bisa digeser) */
+.controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.segment {
+    display: inline-flex;
+    border: 1px solid rgba(136, 170, 255, 0.35);
+    border-radius: 50px;
+    overflow: hidden;
+}
+
+.seg {
+    min-height: 40px;
+    padding: 0.4rem 1.1rem;
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    color: var(--star-dim);
+    transition: background 0.25s ease, color 0.25s ease;
+}
+
+.segOn {
+    background: rgba(85, 119, 255, 0.3);
+    color: #fff;
+}
+
+.chips {
+    display: flex;
+    gap: 0.5rem;
+    max-width: 100%;
+    overflow-x: auto;
+    padding: 2px 2px 6px;
+    scrollbar-width: none;
+}
+
+.chips::-webkit-scrollbar {
+    display: none;
+}
+
+.chip {
+    flex: 0 0 auto;
+    min-height: 40px;
+    padding: 0.4rem 1rem;
+    border: 1px solid rgba(136, 170, 255, 0.3);
+    border-radius: 50px;
+    font-size: 0.76rem;
+    letter-spacing: 0.08em;
+    color: var(--star-dim);
+    white-space: nowrap;
+    transition: background 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+
+.chipOn {
+    background: rgba(153, 85, 255, 0.28);
+    border-color: rgba(190, 150, 255, 0.7);
+    color: #fff;
+}
+
+.seg:focus-visible,
+.chip:focus-visible {
+    outline: 2px solid #aaccff;
+    outline-offset: 2px;
+}
+
+/* Kartu ID astronot */
+.grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.9rem;
+}
+
+.card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    padding: 1rem 1.1rem;
+    text-align: left;
+    background: rgba(10, 20, 50, 0.72);
+    border: 1px solid rgba(136, 170, 255, 0.22);
+    border-radius: 14px;
+    animation: cardIn 0.5s ease both;
+}
+
+@keyframes cardIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.mine {
+    border-color: rgba(255, 221, 85, 0.65);
+    box-shadow: 0 0 22px rgba(255, 221, 85, 0.14);
+}
+
+.yourBadge {
+    position: absolute;
+    top: -0.65rem;
+    left: 1rem;
+    padding: 0.15rem 0.7rem;
+    border-radius: 50px;
+    background: var(--accent-gold);
+    color: #1a1500;
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.cardHead {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+}
+
+.helmet {
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    color: #aaccff;
+}
+
+.who {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+.name {
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    color: var(--star-white);
+    overflow-wrap: anywhere;
+    line-height: 1.2;
+}
+
+/* Kontras diperbaiki: sebelumnya #6677aa (±3,5:1) di atas kartu gelap */
+.role {
+    font-size: 0.66rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #9db0d8;
+}
+
+.stars {
+    flex: 0 0 auto;
+    font-size: 0.95rem;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+
+.starOn {
+    color: var(--accent-gold);
+}
+
+.starOff {
+    color: rgba(160, 180, 221, 0.35);
+}
+
+.message {
+    font-family: var(--font-body);
+    font-size: 0.92rem;
+    line-height: 1.7;
+    color: #d6e0f7;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.cardFoot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-top: auto;
+}
+
+.cat {
+    padding: 0.15rem 0.7rem;
+    border: 1px solid rgba(136, 170, 255, 0.3);
+    border-radius: 50px;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    color: #aaccff;
+}
+
+.time {
+    font-size: 0.72rem;
+    color: var(--star-dim);
+}
+
+/* Skeleton */
+.skel {
+    animation: none;
+    gap: 0.8rem;
+}
+
+.skelLine {
+    height: 12px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, rgba(136, 170, 255, 0.08), rgba(136, 170, 255, 0.22), rgba(136, 170, 255, 0.08));
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+}
+
+@keyframes shimmer {
+    from {
+        background-position: 200% 0;
+    }
+
+    to {
+        background-position: -200% 0;
+    }
+}
+
+/* Empty / error / load more */
+.state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.9rem;
+    padding: 2.5rem 1rem;
+    text-align: center;
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    color: var(--star-dim);
+}
+
+.loadingNote,
+.moreErr {
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--star-dim);
+}
+
+.moreErr {
+    color: #ff99bb;
+}
+
+.moreWrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 0.4rem;
+}
+
+.btn {
+    min-height: 44px;
+    padding: 0.6rem 1.3rem;
+    background: rgba(5, 5, 31, 0.5);
+    border: 1px solid rgba(136, 170, 255, 0.35);
+    border-radius: 50px;
+    color: var(--star-dim);
+    font-family: var(--font-body);
+    font-size: 0.78rem;
+    font-weight: 300;
+    letter-spacing: 0.14em;
+    cursor: pointer;
+    transition: color 0.3s ease, border-color 0.3s ease;
+}
+
+.btn:hover,
+.btn:focus-visible {
+    color: #fff;
+    border-color: rgba(180, 200, 255, 0.8);
+    outline: none;
+}
+
+.btn:focus-visible {
+    outline: 2px solid #aaccff;
+    outline-offset: 2px;
+}
+
+.btn:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+@media (min-width: 700px) {
+    .inner {
+        padding: 1.5rem 4.5rem calc(3rem + env(safe-area-inset-bottom, 0px)) 2rem;
+        gap: 1.4rem;
+    }
+
+    .grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.1rem;
+    }
+
+    .controls {
+        flex-direction: row;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+}
+
+@media (min-width: 1100px) {
+    .grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* MusicPlayer (fixed, kanan atas, ±13rem tinggi di HP) menutupi judul jika konten mulai dari atas.
+   Di layar sempit/menengah, konten dimulai tepat di bawah player. Pengguna yang menutup player
+   (tombol ×) hanya mendapat ruang kosong lebih di atas, tidak ada yang rusak. */
+@media (max-width: 899px) {
+    .inner {
+        padding-top: 13.5rem;
+    }
+}
+
+/* HP: tombol navigasi jadi bar sticky di dasar layar, selalu terjangkau saat di-scroll */
+@media (max-width: 699px) {
+    .inner {
+        min-height: 100vh;
+        min-height: 100dvh;
+        padding-bottom: 0;
+    }
+
+    .topBar {
+        order: 99;
+        position: sticky;
+        bottom: 0;
+        z-index: 3;
+        justify-content: center;
+        /* melebar penuh (menembus padding .inner) agar latar gradasi tidak terpotong */
+        margin: auto -2.75rem 0 -1.25rem;
+        padding: 1.4rem 2.75rem calc(0.8rem + env(safe-area-inset-bottom, 0px)) 1.25rem;
+        background: linear-gradient(to top, rgba(2, 2, 26, 0.96) 55%, rgba(2, 2, 26, 0));
+        pointer-events: none;
+    }
+
+    .topBar .btn {
+        pointer-events: auto;
+        padding: 0.5rem 0.85rem;
+        letter-spacing: 0.06em;
+        background: rgba(5, 5, 31, 0.85);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .dot,
+    .card,
+    .skelLine {
+        animation: none;
+    }
+
+    .dot {
+        opacity: 0.45;
+    }
+}
+===== END FILE =====
+
+===== FILE: src/sections/SecretEnding.module.css =====
+/* Secret Ending — wrapper setinggi layar (100dvh), tanpa scroll di level section */
+.secret {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    text-align: center;
+    isolation: isolate;
+    background:
+        radial-gradient(ellipse 70% 45% at 50% 16%, rgba(85, 119, 255, 0.2), transparent 70%),
+        radial-gradient(ellipse 80% 60% at 50% 100%, rgba(153, 85, 255, 0.12), transparent 70%);
+}
+
+.sky {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.dot {
+    position: absolute;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 6px 1px rgba(170, 200, 255, 0.8);
+    opacity: 0;
+    animation:
+        dotIn 1.6s ease var(--d) forwards,
+        dotTwinkle var(--dur) ease-in-out calc(var(--d) + 1.6s) infinite;
+}
+
+@keyframes dotIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 0.7;
+    }
+}
+
+@keyframes dotTwinkle {
+
+    0%,
+    100% {
+        opacity: 0.25;
+    }
+
+    50% {
+        opacity: 0.95;
+    }
+}
+
+/* Area isi: boleh scroll sendiri di layar sangat pendek; jarak aman untuk NavDots/music player */
+.stage {
+    position: relative;
+    z-index: 2;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding:
+        calc(3rem + env(safe-area-inset-top, 0px)) 1.25rem calc(6rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* margin auto = pusat vertikal, tapi aman saat konten lebih tinggi dari layar */
+.inner {
+    margin: auto 0;
+    width: 100%;
+    max-width: 560px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Bintang permintaan */
+.starBox {
+    position: relative;
+    width: clamp(96px, 18vh, 150px);
+    aspect-ratio: 1;
+    margin-bottom: 0.9rem;
+    animation: starArrive 2.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.halo {
+    position: absolute;
+    inset: -35%;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(225, 236, 255, 0.85) 0%, rgba(160, 190, 255, 0.32) 30%, rgba(120, 150, 255, 0) 68%);
+    animation: haloPulse 3.6s ease-in-out 2.6s infinite;
+}
+
+.starSvg {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    filter: drop-shadow(0 0 14px rgba(170, 200, 255, 0.9));
+}
+
+@keyframes starArrive {
+    from {
+        opacity: 0;
+        transform: scale(2.8);
+        filter: blur(10px);
+    }
+
+    30% {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+        filter: blur(0);
+    }
+}
+
+@keyframes haloPulse {
+
+    0%,
+    100% {
+        opacity: 0.65;
+        transform: scale(0.94);
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1.08);
+    }
+}
+
+.tag {
+    font-family: var(--font-body, 'Outfit', system-ui, sans-serif);
+    font-size: 0.65rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: #8fa0c8;
+    margin-bottom: 1.8rem;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    opacity: 0;
+    animation: fadeIn 1.6s ease 2.2s forwards;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Teks bertahap */
+.lines {
+    display: flex;
+    flex-direction: column;
+    gap: 1.15rem;
+}
+
+.line {
+    font-family: var(--font-display, 'Cormorant Garamond', Georgia, serif);
+    font-style: italic;
+    font-weight: 300;
+    font-size: clamp(1.15rem, 3.8vw, 1.55rem);
+    line-height: 1.5;
+    color: #dbe7ff;
+    overflow-wrap: anywhere;
+    opacity: 0;
+    animation: lineIn 1.8s ease forwards;
+}
+
+.lineBig {
+    font-size: clamp(1.7rem, 6vw, 2.5rem);
+    color: #fff;
+    text-shadow: 0 0 28px rgba(136, 170, 255, 0.55);
+}
+
+.name {
+    color: #aaccff;
+    text-shadow: 0 0 16px rgba(130, 180, 255, 0.6);
+}
+
+@keyframes lineIn {
+    from {
+        opacity: 0;
+        filter: blur(8px);
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        filter: none;
+        transform: none;
+    }
+}
+
+/* Kunjungan ulang: tampil cepat tanpa sinematik */
+.instant {
+    animation-duration: 0.35s !important;
+    animation-delay: 0s !important;
+}
+
+/* Skip */
+.skip {
+    margin-top: 1.4rem;
+    min-height: 44px;
+    padding: 0 1.2rem;
+    font-family: var(--font-body, 'Outfit', system-ui, sans-serif);
+    font-size: 0.7rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: #8fa0c8;
+    opacity: 0.85;
+    transition: color 0.3s, opacity 0.3s;
+}
+
+.skip:hover {
+    color: #dbe7ff;
+    opacity: 1;
+}
+
+/* Tombol (vertikal, aman untuk mobile) */
+.actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    width: min(100%, 340px);
+    margin-top: 2rem;
+}
+
+.btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 50px;
+    padding: 0.85rem 1.4rem;
+    border-radius: 50px;
+    font-family: var(--font-body, 'Outfit', system-ui, sans-serif);
+    font-size: 0.82rem;
+    font-weight: 300;
+    letter-spacing: 0.14em;
+    color: #eef2ff;
+    border: 1px solid rgba(180, 200, 255, 0.4);
+    transition: transform 0.35s ease, box-shadow 0.35s ease, border-color 0.35s ease, background 0.35s ease;
+    animation: btnIn 0.9s ease var(--d, 0s) both;
+}
+
+.btn:hover {
+    transform: scale(1.03);
+    border-color: #fff;
+}
+
+.btn:focus-visible {
+    outline: 2px solid #aaccff;
+    outline-offset: 3px;
+}
+
+.btnPrimary {
+    background: linear-gradient(135deg, rgba(85, 119, 255, 0.3), rgba(153, 85, 255, 0.3));
+    border-color: rgba(180, 200, 255, 0.6);
+    box-shadow: 0 0 34px rgba(136, 170, 255, 0.28);
+}
+
+.btnPrimary:hover {
+    box-shadow: 0 0 52px rgba(160, 190, 255, 0.5);
+}
+
+.btnSecondary {
+    background: rgba(136, 170, 255, 0.08);
+}
+
+.btnSecondary:hover {
+    background: rgba(136, 170, 255, 0.18);
+}
+
+.btnGhost {
+    background: rgba(0, 0, 0, 0.35);
+    color: #aabbee;
+    border-color: rgba(136, 170, 255, 0.25);
+}
+
+@keyframes btnIn {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@media (max-width: 768px) {
+    .stage {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+}
+
+/* Reduced motion: hanya fade lembut, tanpa zoom/blur/denyut/kedip */
+@media (prefers-reduced-motion: reduce) {
+    .starBox {
+        animation: fadeIn 1.2s ease both;
+    }
+
+    .halo {
+        animation: none;
+    }
+
+    .dot {
+        animation: dotIn 1.2s ease var(--d) forwards;
+    }
+
+    .line {
+        animation: fadeIn 1.4s ease forwards;
+    }
+
+    .btn {
+        animation: fadeIn 0.8s ease var(--d, 0s) both;
+    }
+
+    .btn:hover {
+        transform: none;
+    }
+}
+===== END FILE =====
+
+===== FILE: src/sections/Wishing.module.css =====
+/* Tinggi layar = 100dvh, tanpa padding & min-height 0 → wrapper tidak bisa di-scroll */
+.wishing {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+    background: radial-gradient(ellipse at 50% 25%, rgba(8, 10, 30, 0.45) 0%, rgba(0, 0, 6, 0.6) 75%);
+}
+
+/* Langit: StarField global tetap terlihat di belakang */
+.sky {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background:
+        radial-gradient(ellipse 80% 35% at 50% 105%, rgba(90, 70, 200, 0.22) 0%, transparent 70%),
+        radial-gradient(ellipse 60% 40% at 15% 20%, rgba(80, 120, 255, 0.07) 0%, transparent 70%);
+}
+
+.canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: none;
+    cursor: crosshair;
+}
+
+/* Judul kecil di bagian bawah: aman dari MusicPlayer (kanan atas) dan tidak menutupi langit */
+.caption {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(5.2rem + env(safe-area-inset-bottom, 0px));
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0 1.25rem;
+    text-align: center;
+    pointer-events: none;
+}
+
+.label {
+    font-family: var(--font-body);
+    font-size: 0.65rem;
+    font-weight: 300;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: #aaccff;
+}
+
+.title {
+    font-family: var(--font-display);
+    font-weight: 300;
+    line-height: 1.1;
+    font-size: clamp(1.4rem, 5vw, 2rem);
+    color: var(--star-white);
+}
+
+.title em {
+    font-style: italic;
+    color: #cfe0ff;
+}
+
+/* Petunjuk muncul, bertahan beberapa detik, lalu memudar */
+.hint {
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    font-weight: 300;
+    letter-spacing: 0.1em;
+    color: #9db4e0;
+    opacity: 0;
+    animation: hintLife 9s ease forwards;
+}
+
+@keyframes hintLife {
+    0% {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    12% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    78% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+    }
+}
+
+/* Selalu terlihat, di tengah bawah (aman dari NavDots di kanan & player di atas) */
+.skip {
+    position: absolute;
+    left: 50%;
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    z-index: 5;
+    min-height: 44px;
+    padding: 0.6rem 1.4rem;
+    background: rgba(8, 10, 28, 0.45);
+    border: 1px solid rgba(136, 170, 255, 0.3);
+    border-radius: 50px;
+    color: var(--star-dim);
+    font-family: var(--font-body);
+    font-size: 0.78rem;
+    font-weight: 300;
+    letter-spacing: 0.14em;
+    white-space: nowrap;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    transition: color 0.3s ease, border-color 0.3s ease;
+}
+
+.skip:hover,
+.skip:focus-visible {
+    color: #fff;
+    border-color: rgba(180, 200, 255, 0.8);
+    outline: none;
+}
+
+/* Tombol bantu keyboard / screen reader: tersembunyi secara visual, muncul saat difokus */
+.assist {
+    position: absolute;
+    left: 1rem;
+    top: calc(1rem + env(safe-area-inset-top, 0px));
+    z-index: 6;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.assist:focus-visible {
+    width: auto;
+    height: auto;
+    min-height: 44px;
+    padding: 0.6rem 1.3rem;
+    overflow: visible;
+    clip: auto;
+    background: rgba(8, 10, 28, 0.9);
+    border: 1px solid rgba(180, 200, 255, 0.85);
+    border-radius: 50px;
+    color: #fff;
+    font-family: var(--font-body);
+    font-size: 0.78rem;
+    letter-spacing: 0.14em;
+    outline: none;
+}
+
+/* ── Kartu "bintang masih menyala" / "wish sudah jadi bintang" ── */
+.resume {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+    background: rgba(2, 2, 10, 0.55);
+    animation: resumeIn 0.6s ease both;
+}
+
+@keyframes resumeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.card {
+    width: 100%;
+    max-width: 380px;
+    max-height: 100%;
+    overflow-y: auto;
+    padding: 2rem 1.5rem;
+    text-align: center;
+    background: rgba(4, 4, 20, 0.92);
+    border: 1px solid #1a2d50;
+    border-radius: 20px;
+    box-shadow: 0 0 60px rgba(68, 102, 255, 0.12);
+}
+
+.cardStar {
+    font-size: 1.6rem;
+    color: #aaccff;
+    margin-bottom: 0.6rem;
+    text-shadow: 0 0 20px rgba(136, 170, 255, 0.8);
+}
+
+.cardTitle {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 1.5rem;
+    color: #dbe7ff;
+    margin-bottom: 0.5rem;
+}
+
+.cardText {
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: #8fa0c8;
+    margin-bottom: 1.5rem;
+}
+
+.cardActions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.cardBtn {
+    min-height: 44px;
+    padding: 0.6rem 1.2rem;
+    background: none;
+    border: 1px solid rgba(136, 170, 255, 0.35);
+    border-radius: 50px;
+    color: var(--star-dim);
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    letter-spacing: 0.12em;
+    cursor: pointer;
+    transition: color 0.3s ease, border-color 0.3s ease;
+}
+
+.cardBtn:hover,
+.cardBtn:focus-visible {
+    color: #fff;
+    border-color: rgba(180, 200, 255, 0.8);
+    outline: none;
+}
+
+@media (min-width: 768px) {
+    .caption {
+        bottom: calc(5.6rem + env(safe-area-inset-bottom, 0px));
+    }
+}
+
+/* HP landscape / layar pendek: judul dan petunjuk disembunyikan agar langit tetap lega */
+@media (max-height: 480px) {
+
+    .label,
+    .hint {
+        display: none;
+    }
+
+    .caption {
+        bottom: calc(4.2rem + env(safe-area-inset-bottom, 0px));
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hint {
+        animation-duration: 9s;
+        transform: none;
+    }
+
+    .resume {
+        animation: none;
+    }
+}
+===== END FILE =====

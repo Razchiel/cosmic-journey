@@ -1,0 +1,1951 @@
+COSMIC JOURNEY: SNAPSHOT KODE (versi hemat token)
+Dibuat: 2026-10-29 12:15
+Posisi: siap untuk mengerjakan FASE 6
+Snapshot ini berisi file yang relevan untuk fase ini, kondisi kode TERBARU.
+File lain tidak disertakan; jika butuh, minta saya mengunggahnya.
+
+DAFTAR FILE:
+- package.json
+- vite.config.js
+- src/App.jsx
+- src/services/wishes.js
+- src/data/dummyWishes.js
+- src/sections/Wishing.jsx
+- src/components/WishForm.jsx
+- src/sections/Gallery.jsx
+
+======================================================================
+
+===== FILE: package.json =====
+{
+  "name": "cosmic-journey",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^8.18.0",
+    "framer-motion": "^11.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.184.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.1"
+  }
+}
+===== END FILE =====
+
+===== FILE: vite.config.js =====
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  base: "./", // 🔥 ini penting
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          three: ['three', '@react-three/fiber', '@react-three/drei'],
+          react: ['react', 'react-dom']
+        }
+      }
+    }
+  }
+})
+===== END FILE =====
+
+===== FILE: src/App.jsx =====
+import React, { useState, useCallback, useEffect, useRef, Suspense } from 'react'
+import StarField from './components/StarField.jsx'
+import NavDots from './components/NavDots.jsx'
+import MusicPlayer from './components/MusicPlayer.jsx'
+import ProgressBar from './components/ProgressBar.jsx'
+import FactPopup from './components/FactPopup.jsx'
+import MessageBox from './components/MessageBox.jsx'
+
+// Lazy loading sections (kode three.js tidak akan diload di awal)
+const Intro = React.lazy(() => import('./sections/Intro.jsx'))
+const SolarSystem = React.lazy(() => import('./sections/SolarSystem.jsx'))
+const Phenomena = React.lazy(() => import('./sections/Phenomena.jsx'))
+const DeepSpace = React.lazy(() => import('./sections/DeepSpace.jsx'))
+const Ending = React.lazy(() => import('./sections/Ending.jsx'))
+const Wishing = React.lazy(() => import('./sections/Wishing.jsx'))
+const SecretEnding = React.lazy(() => import('./sections/SecretEnding.jsx'))
+const Gallery = React.lazy(() => import('./sections/Gallery.jsx'))
+// HomeWarp memuat three.js → lazy; dipanggil dari section mana pun lewat handleReturnHome
+const HomeWarp = React.lazy(() => import('./components/HomeWarp.jsx'))
+
+import { useAmbientAudio } from './hooks/useAudio.js'
+import { UNIVERSE_MESSAGES } from './data/index.js'
+import { resetSessionCallsign } from './services/wishes.js'
+
+// 'secret' (Secret Ending) SENGAJA tidak masuk daftar ini: bukan bagian navigasi bebas,
+// hanya terbuka lewat submit wish yang sukses. NavDots/ProgressBar memakai 'wishing' saat di 'secret'.
+const SECTION_IDS = ['intro', 'solar', 'phenomena', 'deepspace', 'ending', 'wishing', 'gallery']
+
+// Section tersembunyi yang memakai musik section lain (tanpa crossfade putus).
+// Juga dipakai untuk label MusicPlayer, supaya 'secret' tidak jatuh ke track default.
+const MUSIC_ALIAS = { secret: 'wishing' }
+
+// Dari section ini ke depan, chunk section akhir + HomeWarp diunduh di latar belakang
+const PRELOAD_FROM = new Set(['deepspace', 'ending', 'wishing', 'secret', 'gallery'])
+
+// State pengunjung (in-memory saja — sengaja TIDAK disimpan di localStorage/server)
+// Diisi Ending saat reveal, dibaca Wishing, Secret Ending & Gallery. Direset setelah pulang ke Bumi.
+const INITIAL_VISITOR = {
+  name: '',                // nama penerima konstelasi
+  sender: '',              // pengirim (hanya mode "For Someone Else")
+  constellationPoints: [],
+  finalMessage: '',
+  coords: '',
+  wishSubmitted: false,
+  mySubmission: null,      // data kiriman wish pengunjung ini (untuk highlight "Your wish")
+  skipped: false,          // true = Wishing di-skip langsung ke Gallery (tidak membuka Secret Ending)
+  secretSeen: false,       // true = sinematik Secret Ending sudah selesai/di-skip (kunjungan ulang tampil langsung)
+}
+
+const HOME_END_PAD = 800 // jeda setelah pindah ke intro sebelum overlay HomeWarp dilepas
+// (HomeWarp.jsx: T_LEAVE bergantung pada angka ini, lihat catatan di sana)
+
+// Perjalanan Bumi (intro → solar): Bumi menjauh & mengecil ke posisinya di tata surya
+const TRAVEL_MS = 2800 // dari tombol penuh sampai section berganti
+const ARRIVE_MS = 1000 // jeda sampai UI global muncul lagi
+
+// Transisi gelap-terang untuk perpindahan section selain intro → solar
+const FADE_OUT = 700
+const FADE_IN = 800
+
+export default function App() {
+  const [fact, setFact] = useState(null)
+  const [message, setMessage] = useState(null)
+
+  const [activeSection, setActiveSection] = useState('intro')
+  const [renderedSection, setRenderedSection] = useState('intro')
+  const [fadeState, setFadeState] = useState('visible')
+  const navTimer = useRef(0) // timer pergantian section (dibatalkan jika ada perpindahan baru)
+
+  // Perjalanan intro → solar: 'idle' → 'warp' → 'idle'
+  const [warp, setWarp] = useState({ phase: 'idle', startTime: 0 })
+  const warpingRef = useRef(false)
+
+  const [fadePhase, setFadePhase] = useState('idle')
+
+  const [visitor, setVisitor] = useState(INITIAL_VISITOR)
+  const updateVisitor = useCallback((patch) => setVisitor((v) => ({ ...v, ...patch })), [])
+  // true = Ending langsung membuka pesan konstelasi (dari Secret Ending: "Stay with my constellation")
+  const [resumeMessage, setResumeMessage] = useState(false)
+
+  const [homeWarping, setHomeWarping] = useState(false)
+  const homeTimers = useRef([])
+
+  const {
+    playing,
+    toggleMusic,
+    volume,
+    setVolume,
+    changeSection,
+    getAudioData,
+    audioProgress,
+  } = useAmbientAudio()
+
+  const handleNavigate = useCallback((id) => {
+    setFact(null)
+    setMessage(null)
+    if (id === activeSection) return
+    if (id !== 'ending') setResumeMessage(false)
+    setActiveSection(id)
+    setFadeState('hidden')
+    changeSection(MUSIC_ALIAS[id] ?? id)
+
+    // Perpindahan cepat beruntun: hanya tujuan terakhir yang dirender (tanpa kilatan section perantara)
+    clearTimeout(navTimer.current)
+    navTimer.current = setTimeout(() => {
+      setRenderedSection(id)
+      setFadeState('visible')
+    }, 400)
+  }, [activeSection, changeSection])
+
+  // NavDots: diabaikan selama transisi / HomeWarp (tombol tetap bisa dijangkau keyboard walau tersembunyi)
+  const handleNavDot = useCallback((id) => {
+    if (warpingRef.current) return
+    handleNavigate(id)
+  }, [handleNavigate])
+
+  // Dipanggil Intro saat tombol tahan penuh: Intro menganimasikan Bumi, App mengganti section
+  const handleWarpNavigate = useCallback((id) => {
+    if (warpingRef.current || id === activeSection) return
+    warpingRef.current = true
+    setFact(null)
+    setMessage(null)
+    setWarp({ phase: 'warp', startTime: Date.now() })
+
+    setTimeout(() => {
+      handleNavigate(id)
+      setTimeout(() => {
+        setWarp({ phase: 'idle', startTime: 0 })
+        warpingRef.current = false
+      }, ARRIVE_MS)
+    }, TRAVEL_MS)
+  }, [activeSection, handleNavigate])
+
+  const handleFadeNavigate = useCallback((id) => {
+    if (warpingRef.current || id === activeSection) return
+    warpingRef.current = true
+    setFact(null)
+    setMessage(null)
+    setFadePhase('dark')
+
+    setTimeout(() => {
+      handleNavigate(id)
+      setFadePhase('light')
+
+      setTimeout(() => {
+        setFadePhase('idle')
+        warpingRef.current = false
+      }, FADE_IN)
+    }, FADE_OUT)
+  }, [activeSection, handleNavigate])
+
+  // Pulang ke Bumi (HomeWarp) — bisa dipanggil dari section mana pun (mis. Secret Ending)
+  const handleReturnHome = useCallback(async () => {
+    if (warpingRef.current) return
+    warpingRef.current = true
+    setFact(null)
+    setMessage(null)
+    try {
+      const { HOME_MS } = await import('./components/HomeWarp.jsx')
+      setHomeWarping(true)
+      const t1 = setTimeout(() => {
+        handleNavigate('intro')
+        const t2 = setTimeout(() => {
+          setHomeWarping(false)
+          setVisitor(INITIAL_VISITOR) // perjalanan baru = pengunjung baru
+          resetSessionCallsign()      // callsign anonim baru untuk pengunjung berikutnya
+          warpingRef.current = false
+        }, HOME_END_PAD)
+        homeTimers.current.push(t2)
+      }, HOME_MS)
+      homeTimers.current.push(t1)
+    } catch (_) {
+      warpingRef.current = false
+    }
+  }, [handleNavigate])
+
+  // Secret Ending → "Stay with my constellation"
+  const handleBackToConstellation = useCallback(() => {
+    setResumeMessage(true)
+    handleFadeNavigate('ending')
+  }, [handleFadeNavigate])
+
+  // Wishing: wish berhasil terkirim dan animasi bintang naik selesai → Secret Ending
+  const handleWishSubmitted = useCallback(() => {
+    handleFadeNavigate('secret')
+  }, [handleFadeNavigate])
+
+  useEffect(() => () => {
+    homeTimers.current.forEach(clearTimeout)
+    clearTimeout(navTimer.current)
+  }, [])
+
+  const transitioning = warp.phase !== 'idle' || fadePhase !== 'idle' || homeWarping
+  useEffect(() => {
+    document.body.classList.toggle('hide-global-ui', transitioning)
+    return () => document.body.classList.remove('hide-global-ui')
+  }, [transitioning])
+
+  // Preload Solar System supaya perpindahan dari intro tidak tersendat
+  useEffect(() => {
+    const t = setTimeout(() => import('./sections/SolarSystem.jsx'), 1500)
+    return () => clearTimeout(t)
+  }, [])
+
+  // Preload section akhir + HomeWarp begitu pengunjung mencapai Deep Space,
+  // supaya layar tidak kosong saat pindah ke Ending / Wishing / Secret / Gallery / pulang.
+  const preloaded = useRef(false)
+  useEffect(() => {
+    if (preloaded.current || !PRELOAD_FROM.has(activeSection)) return
+    const t = setTimeout(() => {
+      preloaded.current = true
+      const quiet = () => { }
+      import('./sections/Ending.jsx').catch(quiet)
+      import('./sections/Wishing.jsx').catch(quiet)
+      import('./sections/SecretEnding.jsx').catch(quiet)
+      import('./sections/Gallery.jsx').catch(quiet)
+      import('./components/HomeWarp.jsx').catch(quiet)
+    }, 1200)
+    return () => clearTimeout(t)
+  }, [activeSection])
+
+  const showFact = useCallback((d) => setFact(d), [])
+  const closeFact = useCallback(() => setFact(null), [])
+
+  const showMessage = useCallback(() => {
+    setMessage(UNIVERSE_MESSAGES[Math.floor(Math.random() * UNIVERSE_MESSAGES.length)])
+  }, [])
+  const closeMessage = useCallback(() => setMessage(null), [])
+
+  // Secret Ending tidak punya titik sendiri di NavDots/ProgressBar → ikut 'wishing'
+  const navSection = activeSection === 'secret' ? 'wishing' : activeSection
+  const currentIdx = SECTION_IDS.indexOf(navSection)
+  const progress = Math.max(0, currentIdx / (SECTION_IDS.length - 1))
+
+  return (
+    <>
+      <StarField count={500} mouseParallax />
+      <ProgressBar progress={progress} />
+      <NavDots active={navSection} onNavigate={handleNavDot} />
+
+      <MusicPlayer
+        playing={playing}
+        onToggle={toggleMusic}
+        volume={volume}
+        onVolumeChange={setVolume}
+        activeSection={MUSIC_ALIAS[activeSection] ?? activeSection}
+        getAudioData={getAudioData}
+        audioProgress={audioProgress}
+      />
+
+      <div
+        className={`fade-overlay ${fadePhase === 'dark' ? 'fade-dark' : ''} ${fadePhase === 'light' ? 'fade-light' : ''}`}
+        style={{ '--fade-out': `${FADE_OUT}ms`, '--fade-in': `${FADE_IN}ms` }}
+        aria-hidden="true"
+      />
+
+      <main className={`section-wrapper ${fadeState}`}>
+        <Suspense fallback={null}>
+          {renderedSection === 'intro' && (
+            <Intro
+              onNext={() => handleWarpNavigate('solar')}
+              isWarping={warp.phase !== 'idle'}
+              warpStartTime={warp.startTime}
+              travelMs={TRAVEL_MS}
+            />
+          )}
+          {renderedSection === 'solar' && (
+            <SolarSystem onFact={showFact} onNext={() => handleFadeNavigate('phenomena')} />
+          )}
+          {renderedSection === 'phenomena' && (
+            <Phenomena onFact={showFact} onNext={() => handleFadeNavigate('deepspace')} />
+          )}
+          {renderedSection === 'deepspace' && (
+            <DeepSpace onFact={showFact} onNext={() => handleFadeNavigate('ending')} />
+          )}
+          {renderedSection === 'ending' && (
+            <Ending
+              visitor={visitor}
+              onReveal={updateVisitor}
+              onNext={() => handleFadeNavigate('wishing')}
+              onBackToChoices={() => handleFadeNavigate('secret')}
+              resumeMessage={resumeMessage}
+            />
+          )}
+          {renderedSection === 'wishing' && (
+            <Wishing
+              visitor={visitor}
+              onVisitorChange={updateVisitor}
+              onGallery={() => handleFadeNavigate('gallery')}
+              onSubmitted={handleWishSubmitted}
+              onBackToConstellation={handleBackToConstellation}
+              onReturnHome={handleReturnHome}
+            />
+          )}
+          {renderedSection === 'secret' && (
+            <SecretEnding
+              visitor={visitor}
+              onVisitorChange={updateVisitor}
+              onStay={handleBackToConstellation}
+              onGallery={() => handleFadeNavigate('gallery')}
+              onReturnHome={handleReturnHome}
+            />
+          )}
+          {renderedSection === 'gallery' && (
+            <Gallery
+              visitor={visitor}
+              onBackToConstellation={handleBackToConstellation}
+              onReturnHome={handleReturnHome}
+            />
+          )}
+        </Suspense>
+      </main>
+
+      {homeWarping && (
+        <Suspense fallback={null}>
+          <HomeWarp active name={visitor.name} points={visitor.constellationPoints} />
+        </Suspense>
+      )}
+
+      <FactPopup fact={fact} onClose={closeFact} />
+      <MessageBox message={message} onClose={closeMessage} />
+    </>
+  )
+}
+===== END FILE =====
+
+===== FILE: src/services/wishes.js =====
+// ============================================================
+// COSMIC JOURNEY — Wishes service
+// Fase 2: submitWish dummy. Fase 4: getWishes dummy (membaca src/data/dummyWishes.js).
+// Fase 6: isi file ini diganti fetch ke /api/submit-wish dan /api/get-wishes
+// tanpa mengubah kontrak fungsi yang dipakai UI.
+// ============================================================
+
+import { DUMMY_WISHES } from '../data/dummyWishes.js'
+
+export const MESSAGE_MIN = 5
+export const MESSAGE_MAX = 280
+export const NAME_MAX = 30
+export const PAGE_SIZE = 12
+
+// id = nilai yang dikirim ke backend (whitelist server-side di Fase 6)
+export const CATEGORIES = [
+    { id: 'feedback', label: 'Feedback' },
+    { id: 'suggestion', label: 'Suggestion' },
+    { id: 'developer', label: 'About the developer' },
+    { id: 'wish', label: 'Just a wish' },
+]
+const CATEGORY_IDS = new Set(CATEGORIES.map((c) => c.id))
+
+// ── Callsign anonim: dibuat sekali per sesi (mis. "Astronaut-7F2") ──
+const CALLSIGN_CHARS = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ' // tanpa 0/O/1/I agar tidak membingungkan
+let sessionCallsign = null
+
+export function getSessionCallsign() {
+    if (sessionCallsign) return sessionCallsign
+    const buf = new Uint32Array(3)
+    if (typeof window !== 'undefined' && window.crypto?.getRandomValues) {
+        window.crypto.getRandomValues(buf)
+    } else {
+        for (let i = 0; i < buf.length; i++) buf[i] = Math.floor(Math.random() * 4294967296)
+    }
+    const code = Array.from(buf, (n) => CALLSIGN_CHARS[n % CALLSIGN_CHARS.length]).join('')
+    sessionCallsign = `Astronaut-${code}`
+    return sessionCallsign
+}
+
+// Dipanggil saat pengunjung "pulang ke Bumi" (perjalanan baru = pengunjung baru)
+export function resetSessionCallsign() {
+    sessionCallsign = null
+}
+
+// ── Pembersihan teks (server nanti melakukan hal yang sama) ──
+const cleanName = (s) =>
+    String(s ?? '').replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ').replace(/\s+/g, ' ').trim()
+
+const cleanMessage = (s) =>
+    String(s ?? '')
+        .replace(/\r\n?/g, '\n')
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+
+const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+
+function fail(code, message) {
+    const err = new Error(message)
+    err.code = code
+    return err
+}
+
+/**
+ * Kontrak (tetap sama di Fase 6):
+ *   submitWish({ displayName, isAnonymous, category, message, rating, isPrivate, consent, website })
+ *   → Promise<record>  atau throw Error dengan .code: 'validation' | 'rate_limit' | 'network' | 'server'
+ *   record = { id, displayName, isAnonymous, category, message, rating, isPrivate, createdAt, status }
+ * `website` = field honeypot (harus kosong; server menolak jika terisi).
+ */
+export async function submitWish(payload) {
+    await wait(700 + Math.random() * 500)
+
+    const message = cleanMessage(payload?.message)
+    const rating = Number(payload?.rating)
+    const isPrivate = Boolean(payload?.isPrivate)
+
+    if (message.length < MESSAGE_MIN || message.length > MESSAGE_MAX) {
+        throw fail('validation', `Your message needs ${MESSAGE_MIN}–${MESSAGE_MAX} characters.`)
+    }
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+        throw fail('validation', 'Please choose a rating from 1 to 5 stars.')
+    }
+    if (!CATEGORY_IDS.has(payload?.category)) {
+        throw fail('validation', 'Please choose a category.')
+    }
+    if (!isPrivate && !payload?.consent) {
+        throw fail('validation', 'Please agree to show your message in the Gallery, or send it privately.')
+    }
+
+    const isAnonymous = Boolean(payload?.isAnonymous)
+    const displayName = cleanName(payload?.displayName).slice(0, NAME_MAX) || getSessionCallsign()
+
+    // Honeypot terisi (bot): di fase backend ditolak/di-skip. Di dummy: pura-pura sukses.
+    const record = {
+        id: `local-${Date.now().toString(36)}`,
+        displayName,
+        isAnonymous,
+        category: payload.category,
+        message,
+        rating,
+        isPrivate,
+        createdAt: new Date().toISOString(),
+        status: 'pending',
+    }
+    return record
+}
+
+// ── Fase 4: membaca wish untuk Gallery ──
+
+// Hanya untuk tes manual state error/empty di Gallery: buka /?wishes=error atau /?wishes=empty
+// (dihapus/diabaikan di Fase 6)
+function debugMode() {
+    try {
+        return new URLSearchParams(window.location.search).get('wishes')
+    } catch (_) {
+        return null
+    }
+}
+
+/**
+ * Kontrak (tetap sama di Fase 6):
+ *   getWishes({ sort = 'newest' | 'rating', category = 'all' | <id kategori>, cursor = null, limit = 12 })
+ *   → Promise<{
+ *        items: [{ id, displayName, isAnonymous, category, message, rating, createdAt }],
+ *        nextCursor: string | null,     // opaque: kirim balik apa adanya; null = sudah habis
+ *        total: number,                 // jumlah item yang cocok dengan filter kategori
+ *        aggregate: { average: number, count: number }  // semua wish publik, TIDAK terpengaruh filter
+ *     }>
+ *   atau throw Error dengan .code: 'validation' | 'network' | 'server'
+ * Hanya status 'approved' dan bukan private yang pernah dikembalikan. Field status/isPrivate tidak ikut keluar.
+ * Urutan 'newest' = createdAt turun; 'rating' = rating turun, lalu createdAt turun.
+ */
+export async function getWishes({ sort = 'newest', category = 'all', cursor = null, limit = PAGE_SIZE } = {}) {
+    await wait(350 + Math.random() * 350)
+
+    const mode = debugMode()
+    if (mode === 'error') throw fail('network', 'Could not reach the observatory.')
+
+    if (category !== 'all' && !CATEGORY_IDS.has(category)) {
+        throw fail('validation', 'Unknown category.')
+    }
+    const pageSize = Math.min(50, Math.max(1, Math.floor(Number(limit)) || PAGE_SIZE))
+
+    const publicList = mode === 'empty'
+        ? []
+        : DUMMY_WISHES.filter((w) => w.status === 'approved' && !w.isPrivate)
+
+    const count = publicList.length
+    const sum = publicList.reduce((a, w) => a + w.rating, 0)
+    const aggregate = { count, average: count ? Math.round((sum / count) * 10) / 10 : 0 }
+
+    const byNewest = (a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0)
+    const filtered = category === 'all' ? publicList : publicList.filter((w) => w.category === category)
+    const sorted = [...filtered].sort(
+        sort === 'rating' ? (a, b) => b.rating - a.rating || byNewest(a, b) : byNewest
+    )
+
+    const offset = Math.max(0, parseInt(cursor, 10) || 0)
+    const page = sorted.slice(offset, offset + pageSize)
+    const nextCursor = offset + pageSize < sorted.length ? String(offset + pageSize) : null
+
+    const items = page.map(({ id, displayName, isAnonymous, category: cat, message, rating, createdAt }) => ({
+        id, displayName, isAnonymous, category: cat, message, rating, createdAt,
+    }))
+
+    return { items, nextCursor, total: sorted.length, aggregate }
+}
+===== END FILE =====
+
+===== FILE: src/data/dummyWishes.js =====
+// ============================================================
+// COSMIC JOURNEY — Data dummy Gallery (Fase 4)
+// Hanya dipakai src/services/wishes.js > getWishes(). Fase 6: file ini tidak dipakai lagi
+// (boleh dihapus) karena data datang dari Supabase.
+// Termasuk 1 entri private + 1 entri pending agar filter di getWishes() teruji.
+// ============================================================
+
+const NOW = Date.now()
+const ago = (hours) => new Date(NOW - hours * 3600 * 1000).toISOString()
+
+export const DUMMY_WISHES = [
+    {
+        id: 'd01', displayName: 'Astronaut-7F2', isAnonymous: true, category: 'wish', rating: 5,
+        message: 'Wishing for a quiet year and a very long sunrise.',
+        createdAt: ago(2), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd02', displayName: 'Maya', isAnonymous: false, category: 'feedback', rating: 5,
+        message: 'The moment my name turned into a constellation I actually gasped. The music, the pacing, all of it. It felt like someone built a tiny universe just for me.',
+        createdAt: ago(5), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd03', displayName: 'Astronaut-K9Q', isAnonymous: true, category: 'suggestion', rating: 4,
+        message: 'Would love a way to save my constellation as an image to share. Also the planet facts could use a tiny "read more" link!',
+        createdAt: ago(9), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd04', displayName: 'Rizky', isAnonymous: false, category: 'feedback', rating: 5,
+        message: 'Mantap! Animasi roketnya halus banget di HP saya. Terima kasih sudah bikin ini 🚀',
+        createdAt: ago(14), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd05', displayName: 'Lina Park', isAnonymous: false, category: 'suggestion', rating: 4,
+        message: 'Could the Solar System have a scale toggle? Seeing the real distances between planets would be so humbling.',
+        createdAt: ago(20), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd06', displayName: 'Astronaut-B3M', isAnonymous: true, category: 'wish', rating: 5,
+        message: 'I wish for my grandmother to see another spring.',
+        createdAt: ago(27), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd07', displayName: 'Theo', isAnonymous: false, category: 'feedback', rating: 3,
+        message: 'Beautiful, but the intro loaded slowly on my old phone. Once it started it was great though.',
+        createdAt: ago(40), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd08', displayName: 'Sari', isAnonymous: false, category: 'developer', rating: 5,
+        message: 'Whoever built this: you have a gift for making people feel small in the best way. Please keep making things like this.',
+        createdAt: ago(53), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd09', displayName: 'Astronaut-X4D', isAnonymous: true, category: 'feedback', rating: 4,
+        message: 'Loved the deep space part. The hold-to-travel button was a neat idea.',
+        createdAt: ago(70), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd10', displayName: 'Omar', isAnonymous: false, category: 'wish', rating: 5,
+        message: 'For everyone who looked up tonight and felt a little less alone.',
+        createdAt: ago(95), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd11', displayName: 'Dewi', isAnonymous: false, category: 'suggestion', rating: 5,
+        message: 'Tambahkan bahasa Indonesia ya, biar adik-adik saya bisa ikut baca. Konsepnya keren sekali!',
+        createdAt: ago(120), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd12', displayName: 'Astronaut-9HN', isAnonymous: true, category: 'wish', rating: 4,
+        message: 'Wish: pass my exams. Also a cat.',
+        createdAt: ago(150), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd13', displayName: 'Jonas', isAnonymous: false, category: 'feedback', rating: 5,
+        message: 'Found the brightest falling star on my third try. Why did that feel like winning a prize?',
+        createdAt: ago(200), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd14', displayName: 'Astronaut-Q2W', isAnonymous: true, category: 'developer', rating: 5,
+        message: 'Is this built with react-three-fiber? The planets look so good. I would happily read a write-up on how you made it.',
+        createdAt: ago(260), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd15', displayName: 'Nadia', isAnonymous: false, category: 'wish', rating: 5,
+        message: 'I am writing this from a hospital waiting room, and for five minutes I forgot where I was. Thank you for that. I am wishing for good news tomorrow, for me and for everyone sitting in these chairs.',
+        createdAt: ago(330), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd16', displayName: 'Kenji', isAnonymous: false, category: 'suggestion', rating: 4,
+        message: 'A tiny shooting-star sound when the page changes would be lovely.',
+        createdAt: ago(420), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd17', displayName: 'Astronaut-L6T', isAnonymous: true, category: 'feedback', rating: 2,
+        message: 'The music did not start until I tapped a few times, and the volume was too low on my phone. The rest is lovely.',
+        createdAt: ago(500), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd18', displayName: 'Bima', isAnonymous: false, category: 'feedback', rating: 5,
+        message: 'Keren banget transisinya, kayak beneran terbang melewati tata surya.',
+        createdAt: ago(600), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd19', displayName: 'Clara', isAnonymous: false, category: 'wish', rating: 4,
+        message: 'May all my plants survive the summer.',
+        createdAt: ago(750), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd20', displayName: 'Astronaut-V8R', isAnonymous: true, category: 'suggestion', rating: 5,
+        message: 'Please add a section about black holes with that same gentle narration. I would stay there for hours.',
+        createdAt: ago(900), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd21', displayName: 'Hana', isAnonymous: false, category: 'developer', rating: 5,
+        message: 'Thank you for making something purely beautiful. No ads, no signup, just stars. It reminded me why I fell in love with the internet.',
+        createdAt: ago(1100), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd22', displayName: 'Farid', isAnonymous: false, category: 'feedback', rating: 4,
+        message: 'Smooth on desktop. The Phenomena section is my favourite.',
+        createdAt: ago(1400), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd23', displayName: 'Astronaut-C5J', isAnonymous: true, category: 'wish', rating: 5,
+        message: 'I wish my dad would call more. I wish I would call him more, too.',
+        createdAt: ago(1800), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd24', displayName: 'Elena', isAnonymous: false, category: 'suggestion', rating: 3,
+        message: 'Some text is a bit small and dim on my phone in daylight. A slightly brighter colour would help.',
+        createdAt: ago(2200), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd25', displayName: 'Putra', isAnonymous: false, category: 'wish', rating: 5,
+        message: 'Semoga semua orang yang baca ini hari-harinya dimudahkan. Amin.',
+        createdAt: ago(2600), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd26', displayName: 'Astronaut-M7S', isAnonymous: true, category: 'feedback', rating: 4,
+        message: 'Showed this to my kids and they asked to go around twice.',
+        createdAt: ago(3000), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd27', displayName: 'Iris', isAnonymous: false, category: 'wish', rating: 5,
+        message: 'Wishing for courage. The kind that does not feel like courage until it is over.',
+        createdAt: ago(3400), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd28', displayName: 'Daniel', isAnonymous: false, category: 'feedback', rating: 4,
+        message: 'Great experience overall. The ending message gave me chills.',
+        createdAt: ago(3800), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd29', displayName: 'Astronaut-F3Z', isAnonymous: true, category: 'developer', rating: 5,
+        message: 'Any chance of open-sourcing the falling star mini-game? I would love to learn from it.',
+        createdAt: ago(4200), status: 'approved', isPrivate: false,
+    },
+    {
+        id: 'd30', displayName: 'Ayu', isAnonymous: false, category: 'wish', rating: 5,
+        message: 'Semoga kita semua bisa pulang dengan selamat, ke tempat yang kita sebut rumah.',
+        createdAt: ago(4600), status: 'approved', isPrivate: false,
+    },
+
+    // Tidak boleh pernah muncul di Gallery (diuji oleh getWishes):
+    {
+        id: 'd31', displayName: 'Astronaut-P1X', isAnonymous: true, category: 'developer', rating: 1,
+        message: 'Private note to the developer: this should never be shown.',
+        createdAt: ago(10), status: 'approved', isPrivate: true,
+    },
+    {
+        id: 'd32', displayName: 'Waiting-Room', isAnonymous: false, category: 'feedback', rating: 5,
+        message: 'Still pending review, so not public yet.',
+        createdAt: ago(1), status: 'pending', isPrivate: false,
+    },
+]
+===== END FILE =====
+
+===== FILE: src/sections/Wishing.jsx =====
+import { memo, useEffect, useId, useRef, useState } from 'react'
+import { sfx } from '../hooks/useSfx.js'
+import WishForm from '../components/WishForm.jsx'
+import styles from './Wishing.module.css'
+
+const rand = (a, b) => a + Math.random() * (b - a)
+const randInt = (a, b) => Math.floor(rand(a, b + 1))
+
+const HINT_AFTER = 20      // detik tanpa tangkapan sebelum glow bintang terang naik
+const FADE_MS = 650        // bintang biasa memudar setelah di-tap
+const BURST_MS = 1400      // ledakan cahaya bintang terang
+const BURST_MS_REDUCED = 900
+
+function Wishing({
+    visitor,
+    onVisitorChange,
+    onGallery,
+    onSubmitted,
+    onBackToConstellation,
+    onReturnHome,
+}) {
+    const uid = useId()
+    const wrapRef = useRef(null)
+    const canvasRef = useRef(null)
+    const catchRef = useRef(null)        // diisi effect canvas: tangkap bintang terang lewat tombol bantu
+    const leavingRef = useRef(false)     // true setelah Skip: abaikan onCaught yang terlambat
+    const resumeBtnRef = useRef(null)
+    const doneBtnRef = useRef(null)
+
+    // Wish sudah terkirim di perjalanan ini (mis. kembali lewat NavDots dari Secret Ending / Gallery):
+    // tidak ada permainan lagi supaya tidak terjadi kiriman ganda. Dibaca sekali saat mount.
+    const alreadyDone = useRef(Boolean(visitor?.wishSubmitted)).current
+
+    const [round, setRound] = useState(0)          // naik = main ulang (lepas bintang)
+    const [caught, setCaught] = useState(false)    // bintang terang sudah tertangkap
+    const [formOpen, setFormOpen] = useState(false)
+    const [draft, setDraft] = useState(null)       // isi form yang tersimpan saat form ditutup
+
+    // Dipanggil dari loop canvas (lewat ref agar effect tidak perlu dibuat ulang)
+    const handleCaught = () => {
+        if (leavingRef.current) return
+        setCaught(true)
+        setFormOpen(true)
+    }
+    const caughtCbRef = useRef(handleCaught)
+    caughtCbRef.current = handleCaught
+
+    useEffect(() => {
+        if (alreadyDone) return
+        const canvas = canvasRef.current
+        const wrap = wrapRef.current
+        if (!canvas || !wrap) return
+        const ctx = canvas.getContext('2d')
+        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+        // ── Ukuran canvas (DPR dibatasi 1.5 agar hemat di HP) ───────────
+        let w = 0, h = 0
+        let settled = false   // true = loop sudah berhenti (frame terakhir tampil), resize menggambar ulang
+        const resize = () => {
+            const r = wrap.getBoundingClientRect()
+            w = r.width
+            h = r.height
+            const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
+            canvas.width = Math.max(1, Math.round(w * dpr))
+            canvas.height = Math.max(1, Math.round(h * dpr))
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+            if (settled) draw()
+        }
+        resize()
+        const ro = new ResizeObserver(resize)
+        ro.observe(wrap)
+
+        // ── State permainan (semua di ref/closure, tanpa re-render) ─────
+        // Antrean: false = bintang biasa, true = bintang terang. Terang tidak pernah jadi yang pertama.
+        const total = reduce ? randInt(5, 6) : randInt(5, 10)
+        const queue = Array.from({ length: total - 1 }, () => false)
+        queue.splice(randInt(1, queue.length), 0, true)
+
+        const stars = []
+        let time = 0
+        let nextSpawn = 0.9
+        let boost = 0                 // 0..1, glow petunjuk bintang terang
+        let phase = 'play'            // 'play' | 'burst'
+        let burst = null
+        let done = false
+        const burstMs = reduce ? BURST_MS_REDUCED : BURST_MS
+
+        const spawn = (bright) => {
+            const x = rand(0.06 * w, 0.94 * w)
+            let dir = x < w / 2 ? 1 : -1            // arah ke sisi layar yang lebih lebar
+            if (!bright && Math.random() < 0.2) dir = -dir
+            const room = dir > 0 ? w * 0.97 - x : x - w * 0.03
+            let ang = bright ? rand(0.3, 0.7) : rand(0.35, 1.0)
+            if (!bright || dir === (x < w / 2 ? 1 : -1)) {
+                ang = Math.min(ang, Math.atan(Math.max(room, 40) / (h * 0.75)))
+            }
+            ang = Math.max(ang, 0.18)
+            const base = Math.min(Math.max(h, 360), 900)
+            const speed = (bright ? rand(0.15, 0.19) : rand(0.16, 0.26)) * base * (reduce ? 0.6 : 1)
+            stars.push({
+                x,
+                y: rand(-30, -10),
+                vx: dir * Math.sin(ang) * speed,
+                vy: Math.cos(ang) * speed,
+                bright,
+                r: bright ? 4.6 : rand(1.6, 2.6),
+                tail: bright ? rand(190, 230) : rand(60, 120),
+                state: 'fall',          // fall | fade | caught
+                t: 0,
+                rx: 0, ry: 0,           // posisi riak saat di-tap
+                phase: rand(0, Math.PI * 2),
+            })
+        }
+
+        const requeueBright = () => {
+            if (phase !== 'play') return
+            queue.splice(randInt(0, Math.min(1, queue.length)), 0, true)
+            if (Math.random() < 0.6) queue.unshift(false)   // selingan bintang biasa
+            nextSpawn = Math.min(nextSpawn, 1.0)
+        }
+
+        // Bintang terang tertangkap (lewat tap, atau lewat tombol bantu dengan hit = null / bintang di layar)
+        const catchBright = (hit) => {
+            phase = 'burst'
+            if (hit) { hit.state = 'caught'; hit.t = 0 }
+            burst = { x: hit ? hit.x : w / 2, y: hit ? hit.y : h * 0.35, t: 0 }
+            stars.forEach((s) => {
+                if (s !== hit && s.state === 'fall') {
+                    s.state = 'fade'; s.t = 0; s.rx = s.x; s.ry = s.y
+                    s.vx *= 0.3; s.vy *= 0.3
+                }
+            })
+            sfx.reveal()
+            sfx.chime(4)
+        }
+
+        // Jalur keyboard / screen reader
+        catchRef.current = () => {
+            if (phase !== 'play') return
+            catchBright(stars.find((s) => s.bright && s.state === 'fall') || null)
+        }
+
+        // ── Interaksi: hitbox ≥ 48px (radius 26 / 34), mencakup sedikit ekor ──
+        const onPointerDown = (e) => {
+            if (phase !== 'play') return
+            const rect = canvas.getBoundingClientRect()
+            const px = e.clientX - rect.left
+            const py = e.clientY - rect.top
+
+            let hit = null
+            let best = Infinity
+            for (const s of stars) {
+                if (s.state !== 'fall') continue
+                const R = s.bright ? 34 : 26
+                const len = Math.hypot(s.vx, s.vy) || 1
+                const ax = s.x, ay = s.y
+                const bx = s.x - (s.vx / len) * 30
+                const by = s.y - (s.vy / len) * 30
+                const abx = bx - ax, aby = by - ay
+                let t = ((px - ax) * abx + (py - ay) * aby) / (abx * abx + aby * aby)
+                t = Math.max(0, Math.min(1, t))
+                const d = Math.hypot(px - (ax + abx * t), py - (ay + aby * t))
+                if (d <= R) {
+                    const score = s.bright ? d - 100 : d   // bintang terang diprioritaskan
+                    if (score < best) { best = score; hit = s }
+                }
+            }
+            if (!hit) return
+            e.preventDefault()
+
+            if (hit.bright) {
+                catchBright(hit)
+            } else {
+                hit.state = 'fade'
+                hit.t = 0
+                hit.rx = hit.x
+                hit.ry = hit.y
+                hit.vx *= 0.3
+                hit.vy *= 0.3
+                sfx.click()
+            }
+        }
+        canvas.addEventListener('pointerdown', onPointerDown, { passive: false })
+
+        // ── Update ──────────────────────────────────────────────────────
+        const update = (dt) => {
+            time += dt
+
+            if (phase === 'play') {
+                if (time > HINT_AFTER) boost = Math.min(1, (time - HINT_AFTER) / 4)
+
+                nextSpawn -= dt
+                if (nextSpawn <= 0 && queue.length) {
+                    spawn(queue.shift())
+                    nextSpawn = rand(1.2, 2.8) * (reduce ? 1.4 : 1)
+                }
+            } else if (burst) {
+                burst.t = Math.min(burst.t + dt * 1000, burstMs)
+                if (burst.t >= burstMs && !done) {
+                    done = true
+                    caughtCbRef.current()
+                }
+            }
+
+            for (let i = stars.length - 1; i >= 0; i--) {
+                const s = stars[i]
+                s.t += dt * 1000
+                if (s.state === 'caught') continue
+                s.x += s.vx * dt
+                s.y += s.vy * dt
+                if (s.state === 'fade') {
+                    if (s.t >= FADE_MS) stars.splice(i, 1)
+                    continue
+                }
+                const len = Math.hypot(s.vx, s.vy) || 1
+                const tx = s.x - (s.vx / len) * s.tail
+                const ty = s.y - (s.vy / len) * s.tail
+                const gone = ty > h + 10 || (s.vx > 0 && tx > w + 10) || (s.vx < 0 && tx < -10)
+                if (gone) {
+                    stars.splice(i, 1)
+                    if (s.bright) requeueBright()   // bintang terang lolos → muncul lagi
+                }
+            }
+        }
+
+        // ── Gambar ──────────────────────────────────────────────────────
+        const drawStar = (s) => {
+            if (s.state === 'caught') return
+            const len = Math.hypot(s.vx, s.vy) || 1
+            const ux = s.vx / len, uy = s.vy / len
+            const alpha = s.state === 'fade' ? Math.max(0, 1 - s.t / FADE_MS) : 1
+
+            ctx.globalAlpha = alpha
+
+            // ekor gradasi
+            const tx = s.x - ux * s.tail
+            const ty = s.y - uy * s.tail
+            const g = ctx.createLinearGradient(tx, ty, s.x, s.y)
+            g.addColorStop(0, 'rgba(170,200,255,0)')
+            g.addColorStop(1, `rgba(235,243,255,${s.bright ? 0.95 : 0.8})`)
+            ctx.strokeStyle = g
+            ctx.lineWidth = s.bright ? 2.6 : 1.3
+            ctx.lineCap = 'round'
+            ctx.beginPath()
+            ctx.moveTo(tx, ty)
+            ctx.lineTo(s.x, s.y)
+            ctx.stroke()
+
+            // halo (bintang terang berdenyut halus; naik saat petunjuk)
+            let R, A
+            if (s.bright) {
+                const pulse = reduce ? 0.5 : 0.5 + 0.5 * Math.sin(time * 2.4 + s.phase)
+                R = 24 + pulse * 8 + boost * 10
+                A = 0.22 + pulse * 0.12 + boost * 0.35
+            } else {
+                R = s.r * 5
+                A = 0.4
+            }
+            const hg = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, R)
+            hg.addColorStop(0, `rgba(225,236,255,${Math.min(1, A * 2)})`)
+            hg.addColorStop(0.35, `rgba(160,190,255,${A})`)
+            hg.addColorStop(1, 'rgba(120,150,255,0)')
+            ctx.fillStyle = hg
+            ctx.beginPath()
+            ctx.arc(s.x, s.y, R, 0, Math.PI * 2)
+            ctx.fill()
+
+            ctx.fillStyle = '#fff'
+            ctx.beginPath()
+            ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2)
+            ctx.fill()
+
+            ctx.globalAlpha = 1
+
+            // riak kecil saat bintang biasa di-tap
+            if (s.state === 'fade') {
+                const p = Math.min(1, s.t / FADE_MS)
+                ctx.strokeStyle = `rgba(170,200,255,${0.5 * (1 - p)})`
+                ctx.lineWidth = 1.2
+                ctx.beginPath()
+                ctx.arc(s.rx, s.ry, 6 + 34 * p, 0, Math.PI * 2)
+                ctx.stroke()
+            }
+        }
+
+        const drawBurst = () => {
+            const p = burst.t / burstMs
+            const e = 1 - Math.pow(1 - p, 3)               // ease-out
+            const diag = Math.hypot(w, h)
+            const A = p < 0.5 ? p * 2 : 1 - (p - 0.5) * 0.9 // naik cepat, mengendap ke ~0.55
+            const R = 20 + e * diag * 0.6
+
+            const g = ctx.createRadialGradient(burst.x, burst.y, 0, burst.x, burst.y, R)
+            g.addColorStop(0, `rgba(255,255,255,${A})`)
+            g.addColorStop(0.25, `rgba(205,222,255,${A * 0.8})`)
+            g.addColorStop(1, 'rgba(120,150,255,0)')
+            ctx.fillStyle = g
+            ctx.fillRect(0, 0, w, h)
+
+            // inti bintang membesar
+            ctx.fillStyle = `rgba(255,255,255,${Math.min(1, 0.4 + p)})`
+            ctx.beginPath()
+            ctx.arc(burst.x, burst.y, 5 + e * 38, 0, Math.PI * 2)
+            ctx.fill()
+
+            // gelombang kejut (dilewati saat reduced motion)
+            if (!reduce) {
+                ctx.strokeStyle = `rgba(190,210,255,${Math.max(0, 0.7 * (1 - p))})`
+                ctx.lineWidth = 2
+                ctx.beginPath()
+                ctx.arc(burst.x, burst.y, e * Math.min(w, h) * 0.55, 0, Math.PI * 2)
+                ctx.stroke()
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, w, h)
+            ctx.save()
+            if (burst && !reduce && burst.t < 350) {      // getaran singkat, tanpa saat reduced motion
+                const k = 3 * (1 - burst.t / 350)
+                ctx.translate((Math.random() - 0.5) * k, (Math.random() - 0.5) * k)
+            }
+            stars.forEach(drawStar)
+            if (burst) drawBurst()
+            ctx.restore()
+        }
+
+        let raf = 0
+        let last = performance.now()
+        const frame = (now) => {
+            const dt = Math.min((now - last) / 1000, 0.05)
+            last = now
+            update(dt)
+            draw()
+            // Setelah ledakan selesai hanya bintang tertangkap yang tersisa: tidak ada yang bergerak lagi.
+            // Hentikan loop agar HP tidak menggambar ulang 60fps di belakang form (backdrop blur).
+            if (done && stars.every((s) => s.state === 'caught')) {
+                settled = true
+                raf = 0
+                return
+            }
+            raf = requestAnimationFrame(frame)
+        }
+        raf = requestAnimationFrame(frame)
+
+        return () => {
+            cancelAnimationFrame(raf)
+            canvas.removeEventListener('pointerdown', onPointerDown)
+            ro.disconnect()
+            catchRef.current = null
+        }
+    }, [round, alreadyDone])
+
+    // Fokus: panel "sudah jadi bintang" saat mount; kartu resume saat form ditutup
+    useEffect(() => {
+        if (alreadyDone) doneBtnRef.current?.focus({ preventScroll: true })
+    }, [alreadyDone])
+
+    useEffect(() => {
+        if (caught && !formOpen) resumeBtnRef.current?.focus({ preventScroll: true })
+    }, [caught, formOpen])
+
+    const handleSkip = () => {
+        sfx.click()
+        leavingRef.current = true
+        onVisitorChange?.({ skipped: true })   // flag: skip TIDAK membuka Secret Ending
+        onGallery?.()
+    }
+
+    // Form ditutup tanpa kirim: simpan isi form, tawarkan buka lagi / lepas bintang
+    const handleFormClose = (savedDraft) => {
+        setDraft(savedDraft)
+        setFormOpen(false)
+    }
+
+    // Kiriman sukses: simpan ke state App (mySubmission)
+    const handleSaved = (record) => {
+        onVisitorChange?.({ mySubmission: record, wishSubmitted: true, skipped: false })
+    }
+
+    // Animasi bintang naik selesai → Secret Ending
+    const handleDone = () => {
+        onSubmitted?.()
+    }
+
+    const handleRelease = () => {
+        sfx.click()
+        setFormOpen(false)
+        setCaught(false)
+        setRound((r) => r + 1)
+    }
+
+    const handleReopen = () => {
+        sfx.open()
+        setFormOpen(true)
+    }
+
+    const act = (fn) => () => {
+        sfx.click()
+        leavingRef.current = true
+        fn?.()
+    }
+
+    // ── Wish sudah terkirim: tidak ada permainan, hanya pilihan lanjut ──
+    if (alreadyDone) {
+        return (
+            <section id="wishing" className={styles.wishing}>
+                <div className={styles.resume} role="region" aria-labelledby={`${uid}-done`}>
+                    <div className={styles.card}>
+                        <p className={styles.cardStar} aria-hidden="true">✦</p>
+                        <p id={`${uid}-done`} className={styles.cardTitle}>Your wish is already a star</p>
+                        <p className={styles.cardText}>
+                            One wish for each journey keeps every star special.
+                            Return home whenever you wish to begin a new one.
+                        </p>
+                        <div className={styles.cardActions}>
+                            <button ref={doneBtnRef} className={styles.cardBtn} onClick={act(onBackToConstellation)}>
+                                Stay with my constellation
+                            </button>
+                            <button className={styles.cardBtn} onClick={act(onGallery)}>
+                                View the Gallery
+                            </button>
+                            <button className={styles.cardBtn} onClick={act(onReturnHome)}>
+                                Return home
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        )
+    }
+
+    return (
+        <section id="wishing" className={styles.wishing}>
+            <div ref={wrapRef} className={styles.sky}>
+                <canvas
+                    ref={canvasRef}
+                    className={styles.canvas}
+                    role="img"
+                    aria-label="Night sky with falling stars. Tap the brightest one to make a wish."
+                />
+            </div>
+
+            {/* Jalur keyboard / screen reader: terlihat hanya saat difokus */}
+            {!caught && (
+                <button type="button" className={styles.assist} onClick={() => catchRef.current?.()}>
+                    Catch the brightest star
+                </button>
+            )}
+
+            <div className={styles.caption}>
+                <p className={styles.label}>Wishing Star</p>
+                <h2 className={styles.title}>
+                    Make <em>a wish</em>
+                </h2>
+                <p className={styles.hint}>Find the brightest falling star</p>
+            </div>
+
+            <button className={styles.skip} onClick={handleSkip}>
+                Skip to gallery
+            </button>
+
+            {/* Form ditutup setelah bintang tertangkap: bisa dibuka lagi atau bintang dilepas */}
+            {caught && !formOpen && (
+                <div className={styles.resume}>
+                    <div
+                        className={styles.card}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby={`${uid}-resume`}
+                    >
+                        <p className={styles.cardStar} aria-hidden="true">✦</p>
+                        <p id={`${uid}-resume`} className={styles.cardTitle}>Your star is still glowing</p>
+                        <p className={styles.cardText}>
+                            {draft?.message?.trim()
+                                ? 'Your words are safe. Pick up where you left off.'
+                                : 'Whisper your wish whenever you are ready.'}
+                        </p>
+                        <div className={styles.cardActions}>
+                            <button ref={resumeBtnRef} className={styles.cardBtn} onClick={handleReopen}>
+                                Continue my wish
+                            </button>
+                            <button className={styles.cardBtn} onClick={handleRelease}>
+                                Release the star
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {formOpen && (
+                <WishForm
+                    initialDraft={draft}
+                    onClose={handleFormClose}
+                    onSaved={handleSaved}
+                    onDone={handleDone}
+                />
+            )}
+        </section>
+    )
+}
+
+export default memo(Wishing)
+===== END FILE =====
+
+===== FILE: src/components/WishForm.jsx =====
+import { useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { sfx } from '../hooks/useSfx.js'
+import {
+    CATEGORIES,
+    MESSAGE_MAX,
+    MESSAGE_MIN,
+    NAME_MAX,
+    getSessionCallsign,
+    submitWish,
+} from '../services/wishes.js'
+import styles from './WishForm.module.css'
+
+const RISE_MS = 2800
+const RISE_MS_REDUCED = 1500
+
+const RATING_WORDS = ['', 'A faint glimmer', 'Some starlight', 'A good voyage', 'A bright journey', 'Pure supernova']
+
+const DEFAULT_DRAFT = {
+    name: '',
+    anonymous: false,
+    category: 'wish',
+    message: '',
+    rating: 0,
+    isPrivate: false,
+    consent: false,
+}
+
+/**
+ * Props:
+ *  - initialDraft: isi form yang tersimpan saat form ditutup (opsional)
+ *  - onClose(draft): form ditutup tanpa kirim
+ *  - onSaved(record): kiriman sukses (App menyimpannya sebagai mySubmission)
+ *  - onDone(): animasi bintang naik selesai → lanjut ke Secret Ending
+ */
+export default function WishForm({ initialDraft, onClose, onSaved, onDone }) {
+    const uid = useId()
+    const [draft, setDraft] = useState({ ...DEFAULT_DRAFT, ...initialDraft })
+    const [hoverRating, setHoverRating] = useState(0)
+    const [attempted, setAttempted] = useState(false)
+    const [status, setStatus] = useState('idle') // idle | sending | rise
+    const [serverError, setServerError] = useState('')
+    const [honeypot, setHoneypot] = useState('')
+    const [viewport, setViewport] = useState(null) // { h, top } dari visualViewport (keyboard virtual)
+
+    const dialogRef = useRef(null)
+    const closeRef = useRef(null)
+    const submitRef = useRef(null)
+    const messageRef = useRef(null)
+    const ratingRef = useRef(null)
+    const consentRef = useRef(null)
+    const timerRef = useRef(0)
+    const mountedRef = useRef(false)
+    const draftRef = useRef(draft)
+    draftRef.current = draft
+    const statusRef = useRef(status)
+    statusRef.current = status
+    const cbRef = useRef({ onClose, onSaved, onDone })
+    cbRef.current = { onClose, onSaved, onDone }
+
+    const reduce = useRef(
+        typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ).current
+
+    const callsign = getSessionCallsign()
+    const set = (patch) => setDraft((d) => ({ ...d, ...patch }))
+
+    // ── Validasi ──
+    const msgLen = draft.message.trim().length
+    const errors = {}
+    if (msgLen === 0) errors.message = 'Your wish needs a few words, even a tiny one.'
+    else if (msgLen < MESSAGE_MIN) errors.message = `A little more, please: at least ${MESSAGE_MIN} characters.`
+    if (!draft.rating) errors.rating = 'Please rate your journey. Tap a star.'
+    if (!draft.isPrivate && !draft.consent) {
+        errors.consent = 'Please tick this box to let your message shine in the Gallery, or choose to send it privately.'
+    }
+    const show = attempted ? errors : {}
+
+    // ── Tutup ──
+    const handleClose = () => {
+        if (statusRef.current !== 'idle') return
+        sfx.close()
+        cbRef.current.onClose?.(draftRef.current)
+    }
+    const closeRefFn = useRef(handleClose)
+    closeRefFn.current = handleClose
+
+    // ── Mount: fokus ke dialog, Esc, visualViewport, cleanup ──
+    useEffect(() => {
+        mountedRef.current = true
+        dialogRef.current?.focus({ preventScroll: true })
+
+        const onKey = (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault()
+                closeRefFn.current()
+            }
+        }
+        document.addEventListener('keydown', onKey)
+
+        // Keyboard virtual: ikuti visual viewport agar tombol kirim tidak tertutup
+        const vv = window.visualViewport
+        const sync = () => setViewport({ h: vv.height, top: vv.offsetTop })
+        if (vv) {
+            sync()
+            vv.addEventListener('resize', sync)
+            vv.addEventListener('scroll', sync)
+        }
+
+        return () => {
+            mountedRef.current = false
+            clearTimeout(timerRef.current)
+            document.removeEventListener('keydown', onKey)
+            if (vv) {
+                vv.removeEventListener('resize', sync)
+                vv.removeEventListener('scroll', sync)
+            }
+        }
+    }, [])
+
+    // Fokus terjebak di dalam dialog (portal ada di akhir body)
+    const onKeyDown = (e) => {
+        if (e.key !== 'Tab') return
+        const active = document.activeElement
+        if (e.shiftKey && (active === closeRef.current || active === dialogRef.current)) {
+            e.preventDefault()
+            submitRef.current?.focus()
+        } else if (!e.shiftKey && active === submitRef.current) {
+            e.preventDefault()
+            closeRef.current?.focus()
+        }
+    }
+
+    // ── Submit ──
+    const handleSubmit = async (e) => {
+        e.preventDefault()
+        if (status !== 'idle') return
+        setAttempted(true)
+
+        if (errors.message) return messageRef.current?.focus()
+        if (errors.rating) return ratingRef.current?.focus()
+        if (errors.consent) return consentRef.current?.focus()
+
+        setStatus('sending')
+        setServerError('')
+
+        const anonymous = draft.anonymous || !draft.name.trim()
+        const payload = {
+            displayName: anonymous ? callsign : draft.name.trim(),
+            isAnonymous: anonymous,
+            category: draft.category,
+            message: draft.message.trim(),
+            rating: draft.rating,
+            isPrivate: draft.isPrivate,
+            consent: draft.consent,
+            website: honeypot, // honeypot: harus kosong
+        }
+
+        try {
+            const record = await submitWish(payload)
+            if (!mountedRef.current) return
+            sfx.reveal()
+            cbRef.current.onSaved?.(record)
+            setStatus('rise')
+            timerRef.current = setTimeout(() => cbRef.current.onDone?.(), reduce ? RISE_MS_REDUCED : RISE_MS)
+        } catch (err) {
+            if (!mountedRef.current) return
+            setStatus('idle')
+            setServerError(
+                err?.code === 'validation' || err?.code === 'rate_limit'
+                    ? err.message
+                    : 'Your wish got lost in the dark for a moment. Please try again.'
+            )
+        }
+    }
+
+    const busy = status !== 'idle'
+    const rising = status === 'rise'
+
+    const overlayStyle = viewport
+        ? { height: `${viewport.h}px`, top: `${viewport.top}px` }
+        : undefined
+
+    const content = (
+        <div className={`${styles.overlay} ${rising ? styles.overlayRise : ''}`} style={overlayStyle}>
+            <div
+                ref={dialogRef}
+                className={`${styles.box} ${rising ? styles.boxOut : ''}`}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={`${uid}-title`}
+                aria-describedby={`${uid}-notice`}
+                tabIndex={-1}
+                onKeyDown={onKeyDown}
+            >
+                <header className={styles.header}>
+                    <div>
+                        <p className={styles.eyebrow}>Wishing Star</p>
+                        <h3 id={`${uid}-title`} className={styles.title}>
+                            Whisper <em>your wish</em>
+                        </h3>
+                    </div>
+                    <button
+                        ref={closeRef}
+                        type="button"
+                        className={styles.close}
+                        onClick={handleClose}
+                        disabled={busy}
+                        aria-label="Close wish form"
+                    >
+                        ✕
+                    </button>
+                </header>
+
+                <form className={styles.form} onSubmit={handleSubmit} noValidate>
+                    <div className={styles.body}>
+                        <p id={`${uid}-notice`} className={styles.notice}>
+                            {draft.isPrivate
+                                ? 'Only the developer will read this message. Still, please don’t share personal information.'
+                                : 'Your message will be displayed in the Gallery of Astronauts for other travelers to see. Please don’t include personal information such as email, phone number or address.'}
+                        </p>
+
+                        {/* Nama + anonim */}
+                        <div className={styles.field}>
+                            <label htmlFor={`${uid}-name`} className={styles.label}>
+                                Your name <span className={styles.opt}>optional</span>
+                            </label>
+                            <input
+                                id={`${uid}-name`}
+                                type="text"
+                                className={styles.input}
+                                value={draft.anonymous ? callsign : draft.name}
+                                onChange={(e) => set({ name: e.target.value })}
+                                disabled={draft.anonymous}
+                                maxLength={NAME_MAX}
+                                placeholder="How should we call you?"
+                                autoComplete="off"
+                            />
+                            <label className={styles.switchRow}>
+                                <input
+                                    type="checkbox"
+                                    role="switch"
+                                    className={styles.hiddenInput}
+                                    checked={draft.anonymous}
+                                    onChange={(e) => set({ anonymous: e.target.checked })}
+                                />
+                                <span className={styles.switchTrack} aria-hidden="true">
+                                    <span className={styles.switchThumb} />
+                                </span>
+                                <span>Stay anonymous</span>
+                            </label>
+                            <p className={styles.hintSmall}>
+                                {draft.anonymous || !draft.name.trim()
+                                    ? `You will fly as ${callsign}.`
+                                    : 'Your name will appear on your astronaut card.'}
+                            </p>
+                        </div>
+
+                        {/* Kategori */}
+                        <fieldset className={styles.fieldset}>
+                            <legend className={styles.label}>What is this about?</legend>
+                            <div className={styles.chips}>
+                                {CATEGORIES.map((c) => (
+                                    <label key={c.id} className={styles.chip}>
+                                        <input
+                                            type="radio"
+                                            name={`${uid}-cat`}
+                                            value={c.id}
+                                            className={styles.hiddenInput}
+                                            checked={draft.category === c.id}
+                                            onChange={() => set({ category: c.id })}
+                                        />
+                                        <span className={styles.chipText}>{c.label}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </fieldset>
+
+                        {/* Pesan */}
+                        <div className={styles.field}>
+                            <label htmlFor={`${uid}-msg`} className={styles.label}>Your message</label>
+                            <textarea
+                                id={`${uid}-msg`}
+                                ref={messageRef}
+                                className={`${styles.input} ${styles.textarea} ${show.message ? styles.invalid : ''}`}
+                                rows={4}
+                                maxLength={MESSAGE_MAX}
+                                value={draft.message}
+                                onChange={(e) => set({ message: e.target.value })}
+                                placeholder="Feedback, a suggestion, or a wish for the universe…"
+                                aria-invalid={Boolean(show.message)}
+                                aria-describedby={`${uid}-count${show.message ? ` ${uid}-msg-err` : ''}`}
+                            />
+                            <div className={styles.metaRow}>
+                                <span
+                                    id={`${uid}-count`}
+                                    className={`${styles.counter} ${draft.message.length >= MESSAGE_MAX - 20 ? styles.counterNear : ''}`}
+                                >
+                                    {draft.message.length}/{MESSAGE_MAX}
+                                </span>
+                            </div>
+                            {show.message && <p id={`${uid}-msg-err`} className={styles.error}>{show.message}</p>}
+                        </div>
+
+                        {/* Rating */}
+                        <fieldset
+                            ref={ratingRef}
+                            tabIndex={-1}
+                            className={styles.fieldset}
+                            aria-describedby={show.rating ? `${uid}-rate-err` : undefined}
+                        >
+                            <legend className={styles.label}>How was your journey?</legend>
+                            <div className={styles.stars} onPointerLeave={() => setHoverRating(0)}>
+                                {[1, 2, 3, 4, 5].map((n) => {
+                                    const on = n <= (hoverRating || draft.rating)
+                                    return (
+                                        <label
+                                            key={n}
+                                            className={`${styles.star} ${on ? styles.starOn : ''}`}
+                                            onPointerEnter={(e) => e.pointerType === 'mouse' && setHoverRating(n)}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name={`${uid}-rating`}
+                                                value={n}
+                                                className={styles.hiddenInput}
+                                                checked={draft.rating === n}
+                                                onChange={() => {
+                                                    set({ rating: n })
+                                                    sfx.chime(n)
+                                                }}
+                                            />
+                                            <span aria-hidden="true">★</span>
+                                            <span className={styles.srOnly}>{n} {n === 1 ? 'star' : 'stars'}</span>
+                                        </label>
+                                    )
+                                })}
+                                <span className={styles.ratingWord} aria-hidden="true">
+                                    {RATING_WORDS[hoverRating || draft.rating]}
+                                </span>
+                            </div>
+                            {show.rating && <p id={`${uid}-rate-err`} className={styles.error}>{show.rating}</p>}
+                        </fieldset>
+
+                        {/* Private */}
+                        <label className={styles.check}>
+                            <input
+                                type="checkbox"
+                                className={styles.hiddenInput}
+                                checked={draft.isPrivate}
+                                onChange={(e) => set({ isPrivate: e.target.checked })}
+                            />
+                            <span className={styles.checkBox} aria-hidden="true">✓</span>
+                            <span>
+                                Send privately to the developer
+                                <small className={styles.checkSmall}>It won’t appear in the Gallery.</small>
+                            </span>
+                        </label>
+
+                        {/* Persetujuan tampil publik (tidak perlu untuk mode private) */}
+                        {!draft.isPrivate && (
+                            <div className={styles.field}>
+                                <label className={styles.check}>
+                                    <input
+                                        ref={consentRef}
+                                        type="checkbox"
+                                        className={styles.hiddenInput}
+                                        checked={draft.consent}
+                                        onChange={(e) => set({ consent: e.target.checked })}
+                                        aria-invalid={Boolean(show.consent)}
+                                        aria-describedby={show.consent ? `${uid}-consent-err` : undefined}
+                                    />
+                                    <span className={`${styles.checkBox} ${show.consent ? styles.checkBoxInvalid : ''}`} aria-hidden="true">✓</span>
+                                    <span>I agree that my message may be shown publicly in the Gallery of Astronauts.</span>
+                                </label>
+                                {show.consent && <p id={`${uid}-consent-err`} className={styles.error}>{show.consent}</p>}
+                            </div>
+                        )}
+
+                        {/* Honeypot (disiapkan untuk fase backend): manusia tidak melihatnya */}
+                        <div className={styles.hp} aria-hidden="true">
+                            <label>
+                                Website
+                                <input
+                                    type="text"
+                                    name="website"
+                                    tabIndex={-1}
+                                    autoComplete="off"
+                                    value={honeypot}
+                                    onChange={(e) => setHoneypot(e.target.value)}
+                                />
+                            </label>
+                        </div>
+                    </div>
+
+                    {/* Footer selalu terlihat (di luar area scroll) */}
+                    <div className={styles.footer}>
+                        {serverError && <p role="alert" className={`${styles.error} ${styles.serverError}`}>{serverError}</p>}
+                        <button ref={submitRef} type="submit" className={styles.submit} disabled={status === 'sending'} aria-busy={status === 'sending'}>
+                            {status === 'sending' ? 'Sending to the stars…' : draft.isPrivate ? 'Send privately ✦' : 'Send my wish ✦'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            {/* Bintang permintaan naik */}
+            {rising && (
+                <div className={styles.rise} aria-hidden="true">
+                    <span className={styles.riseStar}>✦</span>
+                    <p className={styles.riseText}>Your wish is rising to the stars…</p>
+                </div>
+            )}
+            <div role="status" className={styles.srOnly}>
+                {rising ? 'Your wish is rising to the stars.' : ''}
+            </div>
+        </div>
+    )
+
+    return createPortal(content, document.body)
+}
+===== END FILE =====
+
+===== FILE: src/sections/Gallery.jsx =====
+// src/sections/Gallery.jsx [UBAH: menimpa file lama]
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import styles from './Gallery.module.css'
+import { getWishes, CATEGORIES, PAGE_SIZE } from '../services/wishes.js'
+import { sfx } from '../hooks/useSfx.js'
+
+const CATEGORY_LABEL = Object.fromEntries(CATEGORIES.map((c) => [c.id, c.label]))
+const SORTS = [
+    { id: 'newest', label: 'Newest' },
+    { id: 'rating', label: 'Highest rated' },
+]
+
+// Bintang kecil berdenyut di latar (posisi deterministik, dihitung sekali)
+const STAR_DOTS = Array.from({ length: 32 }, (_, i) => {
+    const r = (n) => {
+        const x = Math.sin(i * 12.9898 + n * 78.233) * 43758.5453
+        return x - Math.floor(x)
+    }
+    return { left: r(1) * 100, top: r(2) * 100, size: 1 + r(3) * 2, delay: r(4) * 5, dur: 3 + r(5) * 4 }
+})
+
+function timeAgo(iso) {
+    const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000)
+    if (s < 60) return 'just now'
+    const m = Math.floor(s / 60)
+    if (m < 60) return `${m}m ago`
+    const h = Math.floor(m / 60)
+    if (h < 24) return `${h}h ago`
+    const d = Math.floor(h / 24)
+    if (d < 7) return `${d}d ago`
+    const w = Math.floor(d / 7)
+    if (d < 30) return `${w}w ago`
+    const mo = Math.floor(d / 30)
+    if (mo < 12) return `${mo}mo ago`
+    return `${Math.floor(d / 365)}y ago`
+}
+
+function Helmet() {
+    return (
+        <svg className={styles.helmet} viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+            <path d="M16 3C9 3 4.5 8 4.5 14.5V19c0 4 3 7 6.5 7h10c3.5 0 6.500-3 6.500-7v-4.500C27.500 8 23 3 16 3z"
+                fill="none" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M9 13.500c0-2.800 2.800-4.800 7-4.800s7 2 7 4.800v2.200c0 2.600-2.800 4.300-7 4.300s-7-1.700-7-4.300z"
+                fill="rgba(136,170,255,0.18)" stroke="currentColor" strokeWidth="1.2" />
+            <path d="M11.500 12c1-.9 2.300-1.300 3.800-1.300" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+    )
+}
+
+function Stars({ value }) {
+    return (
+        <span className={styles.stars} role="img" aria-label={`Rated ${value} out of 5`}>
+            {[1, 2, 3, 4, 5].map((n) => (
+                <span key={n} aria-hidden="true" className={n <= value ? styles.starOn : styles.starOff}>★</span>
+            ))}
+        </span>
+    )
+}
+
+function Card({ item, mine }) {
+    return (
+        <article className={`${styles.card} ${mine ? styles.mine : ''}`}>
+            {mine && <span className={styles.yourBadge}>Your wish</span>}
+            <header className={styles.cardHead}>
+                <Helmet />
+                <div className={styles.who}>
+                    <span className={styles.name}>{item.displayName}</span>
+                    <span className={styles.role}>{item.isAnonymous ? 'Anonymous astronaut' : 'Astronaut'}</span>
+                </div>
+                <Stars value={item.rating} />
+            </header>
+            <p className={styles.message}>{item.message}</p>
+            <footer className={styles.cardFoot}>
+                <span className={styles.cat}>{CATEGORY_LABEL[item.category] ?? item.category}</span>
+                <time className={styles.time} dateTime={item.createdAt}>{timeAgo(item.createdAt)}</time>
+            </footer>
+        </article>
+    )
+}
+
+function Skeletons() {
+    return (
+        <div className={styles.grid} role="status" aria-label="Loading messages">
+            {Array.from({ length: 6 }, (_, i) => (
+                <div key={i} className={`${styles.card} ${styles.skel}`} aria-hidden="true">
+                    <div className={styles.skelLine} style={{ width: '55%' }} />
+                    <div className={styles.skelLine} style={{ width: '95%' }} />
+                    <div className={styles.skelLine} style={{ width: '80%' }} />
+                    <div className={styles.skelLine} style={{ width: '35%' }} />
+                </div>
+            ))}
+        </div>
+    )
+}
+
+function Gallery({ visitor, onBackToConstellation, onReturnHome }) {
+    const [sort, setSort] = useState('newest')
+    const [category, setCategory] = useState('all')
+    const [items, setItems] = useState([])
+    const [nextCursor, setNextCursor] = useState(null)
+    const [aggregate, setAggregate] = useState(null)
+    const [status, setStatus] = useState('loading') // loading | ready | error
+    const [more, setMore] = useState('idle')        // idle | loading | error
+    const [retryKey, setRetryKey] = useState(0)
+    const reqRef = useRef(0)
+
+    const mySubmission = visitor?.mySubmission
+    const cameFromSecret = Boolean(visitor?.wishSubmitted || mySubmission)
+    const showMine = Boolean(
+        mySubmission && !mySubmission.isPrivate && (category === 'all' || mySubmission.category === category)
+    )
+
+    useEffect(() => {
+        const id = ++reqRef.current
+        setStatus('loading')
+        setMore('idle')
+        setItems([])
+        setNextCursor(null)
+        getWishes({ sort, category, limit: PAGE_SIZE })
+            .then((res) => {
+                if (id !== reqRef.current) return
+                setItems(res.items)
+                setNextCursor(res.nextCursor)
+                setAggregate(res.aggregate)
+                setStatus('ready')
+            })
+            .catch(() => {
+                if (id !== reqRef.current) return
+                setStatus('error')
+            })
+        return () => { reqRef.current++ } // abaikan respons yang datang setelah unmount/ganti filter
+    }, [sort, category, retryKey])
+
+    const loadMore = useCallback(() => {
+        if (!nextCursor || more === 'loading') return
+        sfx.click()
+        const id = reqRef.current
+        setMore('loading')
+        getWishes({ sort, category, cursor: nextCursor, limit: PAGE_SIZE })
+            .then((res) => {
+                if (id !== reqRef.current) return
+                setItems((prev) => {
+                    const seen = new Set(prev.map((i) => i.id))
+                    return [...prev, ...res.items.filter((i) => !seen.has(i.id))]
+                })
+                setNextCursor(res.nextCursor)
+                setMore('idle')
+            })
+            .catch(() => {
+                if (id !== reqRef.current) return
+                setMore('error')
+            })
+    }, [nextCursor, more, sort, category])
+
+    const pick = (setter, value, current) => {
+        if (value === current) return
+        sfx.click()
+        setter(value)
+    }
+
+    const summary = useMemo(() => {
+        if (!aggregate) return null
+        if (!aggregate.count) return 'Be the first astronaut to leave a message'
+        return `${aggregate.average.toFixed(1)} ★ from ${aggregate.count} ${aggregate.count === 1 ? 'astronaut' : 'astronauts'}`
+    }, [aggregate])
+
+    const nothing = status === 'ready' && items.length === 0 && !showMine
+
+    return (
+        <section id="gallery" className={styles.gallery}>
+            <div className={styles.sky} aria-hidden="true">
+                {STAR_DOTS.map((d, i) => (
+                    <span
+                        key={i}
+                        className={styles.dot}
+                        style={{
+                            left: `${d.left}%`, top: `${d.top}%`,
+                            width: d.size, height: d.size,
+                            animationDelay: `${d.delay}s`, animationDuration: `${d.dur}s`,
+                        }}
+                    />
+                ))}
+            </div>
+
+            <div className={styles.inner}>
+                <div className={styles.topBar}>
+                    <button className={styles.btn} onClick={() => { sfx.close(); onBackToConstellation?.() }}>
+                        ← Back to the stars
+                    </button>
+                    {cameFromSecret && (
+                        <button className={styles.btn} onClick={() => { sfx.click(); onReturnHome?.() }}>
+                            Return home
+                        </button>
+                    )}
+                </div>
+
+                <header className={styles.head}>
+                    <p className={styles.label}>Astronaut Gallery</p>
+                    <h2 className={styles.title}>
+                        Voices <em>among the stars</em>
+                    </h2>
+                    <p className={styles.summary} aria-live="polite">{summary ?? '\u00A0'}</p>
+                </header>
+
+                <div className={styles.controls}>
+                    <div className={styles.segment} role="group" aria-label="Sort messages">
+                        {SORTS.map((s) => (
+                            <button
+                                key={s.id}
+                                className={`${styles.seg} ${sort === s.id ? styles.segOn : ''}`}
+                                aria-pressed={sort === s.id}
+                                onClick={() => pick(setSort, s.id, sort)}
+                            >
+                                {s.label}
+                            </button>
+                        ))}
+                    </div>
+                    <div className={styles.chips} role="group" aria-label="Filter by category">
+                        {[{ id: 'all', label: 'All' }, ...CATEGORIES].map((c) => (
+                            <button
+                                key={c.id}
+                                className={`${styles.chip} ${category === c.id ? styles.chipOn : ''}`}
+                                aria-pressed={category === c.id}
+                                onClick={() => pick(setCategory, c.id, category)}
+                            >
+                                {c.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {status === 'loading' && !showMine && <Skeletons />}
+
+                {status === 'error' && (
+                    <div className={styles.state} role="alert">
+                        <p>The signal got lost on its way here.</p>
+                        <button className={styles.btn} onClick={() => setRetryKey((k) => k + 1)}>Try again</button>
+                    </div>
+                )}
+
+                {nothing && (
+                    <div className={styles.state}>
+                        <p>{category === 'all'
+                            ? 'No messages among the stars yet. Yours could be the first.'
+                            : 'No messages in this corner of the sky yet.'}</p>
+                        {category !== 'all' && (
+                            <button className={styles.btn} onClick={() => pick(setCategory, 'all', category)}>Show all</button>
+                        )}
+                    </div>
+                )}
+
+                {(showMine || (status !== 'error' && items.length > 0)) && (
+                    <div className={styles.grid}>
+                        {showMine && <Card item={mySubmission} mine />}
+                        {items.map((it) => <Card key={it.id} item={it} />)}
+                    </div>
+                )}
+
+                {status === 'loading' && showMine && (
+                    <p className={styles.loadingNote} role="status">Gathering more voices…</p>
+                )}
+
+                {status === 'ready' && nextCursor && (
+                    <div className={styles.moreWrap}>
+                        <button className={styles.btn} onClick={loadMore} disabled={more === 'loading'}>
+                            {more === 'loading' ? 'Loading…' : 'Load more'}
+                        </button>
+                        {more === 'error' && (
+                            <p className={styles.moreErr} role="alert">Couldn't load more. Please try again.</p>
+                        )}
+                    </div>
+                )}
+            </div>
+        </section>
+    )
+}
+
+export default memo(Gallery)
+===== END FILE =====

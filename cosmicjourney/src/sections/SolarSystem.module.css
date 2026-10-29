@@ -1,0 +1,262 @@
+/* ═══════════════════════════════════════════════════════════
+   SOLAR SYSTEM — 3D Scene
+   ═══════════════════════════════════════════════════════════ */
+.solar {
+  background: radial-gradient(ellipse at 15% 50%, rgba(8, 20, 42, 0.78) 0%, rgba(0, 0, 8, 0.55) 60%);
+  overflow: hidden;
+  position: relative;
+}
+
+.bgGradient {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 40% 60% at 0% 50%, rgba(255, 180, 60, 0.05) 0%, transparent 70%),
+    radial-gradient(ellipse 30% 40% at 90% 30%, rgba(68, 102, 255, 0.04) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.header {
+  position: absolute;
+  top: 5vh;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  z-index: 10;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  pointer-events: none;
+}
+
+.headerHidden {
+  opacity: 0;
+  transform: translate(-50%, -20px);
+}
+
+.title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 300;
+  color: #c8d8ff;
+  margin: 0.6rem 0 0.5rem;
+  letter-spacing: 0.03em;
+}
+
+.hint {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.82rem;
+  color: #8092bb;
+  font-weight: 300;
+  letter-spacing: 0.08em;
+}
+
+.planetLabel {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 300;
+  color: #b4c2e6;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  background: rgba(10, 15, 30, 0.6);
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid rgba(100, 150, 255, 0.1);
+  backdrop-filter: blur(4px);
+  white-space: nowrap;
+  transition: opacity 0.3s ease;
+}
+
+.backBtn {
+  position: absolute;
+  top: 30px;
+  left: 30px;
+  z-index: 20;
+  background: rgba(10, 15, 30, 0.8);
+  border: 1px solid rgba(100, 140, 255, 0.3);
+  color: #ccd6ff;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.85rem;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-15px);
+  transition: all 0.4s ease;
+}
+
+.backBtnVisible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.backBtn:hover {
+  background: rgba(40, 60, 120, 0.8);
+  border-color: rgba(140, 180, 255, 0.8);
+}
+
+.orbitHint {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%) translateY(15px);
+  z-index: 20;
+  background: rgba(10, 15, 30, 0.75);
+  border: 1px solid rgba(100, 150, 255, 0.2);
+  color: #aaccff;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+  opacity: 0;
+  transition: all 0.4s ease;
+  white-space: nowrap;
+}
+
+.orbitHintVisible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.canvasWrap {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5;
+}
+
+/* ── TOMBOL NAVIGASI NEXT STAGE ── */
+.nextNav {
+  position: absolute;
+  bottom: 2.2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.nextNavHidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(15px);
+}
+
+.nextBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(10, 15, 30, 0.75);
+  border: 1px solid rgba(68, 102, 255, 0.4);
+  color: #7799ee;
+  padding: 0.75rem 2.2rem;
+  border-radius: 50px;
+  cursor: pointer;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 0.85rem;
+  font-weight: 300;
+  letter-spacing: 0.15em;
+  backdrop-filter: blur(8px);
+  transition: all 0.4s;
+  box-shadow: 0 0 25px rgba(68, 102, 255, 0.1);
+}
+
+.nextBtn:hover {
+  border-color: rgba(120, 160, 255, 0.7);
+  color: #aabbff;
+  box-shadow: 0 0 40px rgba(68, 102, 255, 0.25);
+  transform: translateY(-2px);
+}
+
+.arrow {
+  animation: arrowBounce 1.5s ease-in-out infinite;
+  display: inline-block;
+}
+
+@keyframes arrowBounce {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(4px);
+  }
+}
+
+@media (max-width: 768px) {
+  .header {
+    top: 2.5vh;
+    width: 90%;
+  }
+
+  .title {
+    font-size: 2rem;
+  }
+
+  .hint {
+    font-size: 0.75rem;
+  }
+
+  .backBtn {
+    top: 20px;
+    left: 20px;
+    padding: 6px 12px;
+    font-size: 0.78rem;
+  }
+
+  .planetLabel {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    letter-spacing: 0.12em;
+  }
+
+  .nextNav {
+    bottom: 1.5rem;
+  }
+
+  .nextBtn {
+    padding: 0.65rem 1.8rem;
+    font-size: 0.78rem;
+  }
+
+  /* Section pas setinggi layar nyata → tidak bisa ter-scroll, UI tidak terdorong keluar */
+  section.solar {
+    height: 100dvh;
+    min-height: 0;
+    padding: 0;
+  }
+
+  .header {
+    top: 4vh;
+  }
+
+  .nextNav {
+    bottom: 1.25rem;
+  }
+
+  /* Hint dipindah ke bawah tombol Overview, jadi tidak tertutup popup fakta */
+  .orbitHint,
+  .orbitHintVisible {
+    top: 62px;
+    bottom: auto;
+    left: 20px;
+    transform: none;
+    font-size: 0.68rem;
+    padding: 4px 10px;
+  }
+
+  .orbitHint {
+    transform: translateY(-8px);
+  }
+
+  .orbitHintVisible {
+    transform: translateY(0);
+  }
+}

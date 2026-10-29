@@ -1,0 +1,189 @@
+.gate {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding:
+        max(1.5rem, env(safe-area-inset-top)) 1.25rem max(1.5rem, env(safe-area-inset-bottom));
+    background: radial-gradient(ellipse at 50% 55%, #0a0a2e 0%, var(--void) 70%);
+    overflow: hidden;
+    text-align: center;
+    transition: opacity 0.7s ease-in-out;
+}
+
+.leaving {
+    opacity: 0;
+}
+
+.sky {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.star {
+    position: absolute;
+    border-radius: 50%;
+    background: var(--text-primary);
+    opacity: var(--o);
+    animation: twinkle var(--d) ease-in-out var(--delay) infinite alternate;
+}
+
+@keyframes twinkle {
+    from {
+        opacity: calc(var(--o) * 0.25);
+        transform: scale(0.8);
+    }
+
+    to {
+        opacity: var(--o);
+        transform: scale(1.15);
+    }
+}
+
+.content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.1rem;
+    max-width: 22rem;
+}
+
+/* Bintang besar yang berdenyut di atas tombol */
+.core {
+    position: relative;
+    width: 18px;
+    height: 18px;
+    margin-bottom: 1.4rem;
+}
+
+.coreDot {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow:
+        0 0 14px 4px rgba(153, 187, 255, 0.8),
+        0 0 44px 12px rgba(85, 119, 255, 0.4);
+    animation: coreBeat 2.4s ease-in-out infinite;
+}
+
+.coreRing {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(153, 187, 255, 0.7);
+    animation: coreRing 2.4s ease-out infinite;
+}
+
+@keyframes coreBeat {
+
+    0%,
+    100% {
+        transform: scale(0.85);
+        opacity: 0.8;
+    }
+
+    50% {
+        transform: scale(1.1);
+        opacity: 1;
+    }
+}
+
+@keyframes coreRing {
+    from {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+
+    to {
+        transform: scale(5);
+        opacity: 0;
+    }
+}
+
+.kicker {
+    font-family: var(--font-body);
+    font-size: var(--fs-label);
+    font-weight: var(--fw-regular);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--text-muted);
+    text-shadow: var(--text-shadow-soft);
+}
+
+.boardBtn {
+    min-height: 3.25rem;
+    padding: 0.9rem 2.6rem;
+    border: 1px solid rgba(120, 160, 255, 0.6);
+    border-radius: 50px;
+    background: rgba(8, 8, 36, 0.6);
+    color: var(--accent-blue-text);
+    font-family: var(--font-body);
+    font-size: 1rem;
+    font-weight: var(--fw-regular);
+    letter-spacing: 0.12em;
+    box-shadow: 0 0 28px rgba(68, 102, 255, 0.25);
+    transition: border-color 0.3s, box-shadow 0.3s, transform 0.15s;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.boardBtn:hover {
+    border-color: rgba(160, 190, 255, 0.85);
+    box-shadow: 0 0 40px rgba(68, 102, 255, 0.4);
+}
+
+.boardBtn:active {
+    transform: scale(0.97);
+}
+
+.boardBtn:focus-visible,
+.quiet:focus-visible {
+    outline: 2px solid #aaccff;
+    outline-offset: 4px;
+}
+
+.note {
+    margin: 0;
+    font-family: var(--font-body);
+    font-size: var(--fs-label);
+    font-weight: var(--fw-regular);
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+}
+
+.quiet {
+    min-height: 2.75rem;
+    padding: 0.5rem 1rem;
+    font-family: var(--font-body);
+    font-size: var(--fs-label);
+    font-weight: var(--fw-regular);
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .star,
+    .coreDot,
+    .coreRing {
+        animation: none;
+    }
+
+    .coreRing {
+        display: none;
+    }
+
+    .gate {
+        transition-duration: 0.15s;
+    }
+}
