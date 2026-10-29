@@ -70,3 +70,18 @@ desktop.ini
 # 00_master_context.txt
 # 01_phase_tasks.txt
 # phase.txt
+
+
+# Context dan file perencanaan
+*context*.txt
+00_master_context.txt
+01_phase_tasks.txt
+phase.txt
+struktur-project.txt
+
+# Semua file arsip ZIP
+*.zip
+
+# Jika ada arsip ZIP dalam subfolder, juga abaikan
+**/*.zip
+

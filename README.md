@@ -195,7 +195,7 @@ cosmic-journey/
 
 ## License
 
-Add your license here (for example MIT) and a `LICENSE` file.
+By. Alimmul Hafidz AKA Razchiel
 
 ## Credits
 
