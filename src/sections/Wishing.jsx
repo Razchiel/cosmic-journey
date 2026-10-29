@@ -23,6 +23,7 @@ function Wishing({
     const wrapRef = useRef(null)
     const canvasRef = useRef(null)
     const catchRef = useRef(null)        // diisi effect canvas: tangkap bintang terang lewat tombol bantu
+    const releaseRef = useRef(null)      // diisi effect canvas: lepas bintang yang tertangkap
     const leavingRef = useRef(false)     // true setelah Skip: abaikan onCaught yang terlambat
     const resumeBtnRef = useRef(null)
     const doneBtnRef = useRef(null)
@@ -31,7 +32,13 @@ function Wishing({
     // tidak ada permainan lagi supaya tidak terjadi kiriman ganda. Dibaca sekali saat mount.
     const alreadyDone = useRef(Boolean(visitor?.wishSubmitted)).current
 
-    const [round, setRound] = useState(0)          // naik = main ulang (lepas bintang)
+    const [hintGone, setHintGone] = useState(false) // petunjuk tengah layar hanya sekali
+
+    useEffect(() => {
+        if (alreadyDone) return
+        const id = setTimeout(() => setHintGone(true), 8000)
+        return () => clearTimeout(id)
+    }, [alreadyDone])
     const [caught, setCaught] = useState(false)    // bintang terang sudah tertangkap
     const [formOpen, setFormOpen] = useState(false)
     const [draft, setDraft] = useState(null)       // isi form yang tersimpan saat form ditutup
@@ -72,18 +79,40 @@ function Wishing({
 
         // ── State permainan (semua di ref/closure, tanpa re-render) ─────
         // Antrean: false = bintang biasa, true = bintang terang. Terang tidak pernah jadi yang pertama.
-        const total = reduce ? randInt(5, 6) : randInt(5, 10)
-        const queue = Array.from({ length: total - 1 }, () => false)
-        queue.splice(randInt(1, queue.length), 0, true)
+        const queue = []
+        const fillQueue = () => {
+            const total = reduce ? randInt(6, 8) : randInt(9, 15)
+            queue.length = 0
+            for (let i = 0; i < total - 1; i++) queue.push(false)
+            queue.splice(randInt(1, queue.length), 0, true)
+        }
+        fillQueue()
 
         const stars = []
         let time = 0
-        let nextSpawn = 0.9
+        let nextSpawn = 0.6
         let boost = 0                 // 0..1, glow petunjuk bintang terang
-        let phase = 'play'            // 'play' | 'burst'
+        let phase = 'play'            // 'play' | 'burst' | 'release'
         let burst = null
         let done = false
+        let relT = 0                  // ms sejak release dimulai
         const burstMs = reduce ? BURST_MS_REDUCED : BURST_MS
+        const relMs = reduce ? 1000 : 1500
+        // Batas bintang yang sedang jatuh (lebih ketat di HP dan saat reduced motion)
+        const maxActive = () => (w < 768 ? 4 : 6) - (reduce ? 1 : 0)
+
+        // Setelah release selesai: permainan mulai lagi dari awal, tanpa membongkar effect
+        const resetGame = () => {
+            stars.length = 0
+            burst = null
+            relT = 0
+            done = false
+            boost = 0
+            time = 0
+            fillQueue()
+            phase = 'play'
+            nextSpawn = reduce ? 1.4 : 1.0   // jeda singkat sebelum bintang berikutnya
+        }
 
         const spawn = (bright) => {
             const x = rand(0.06 * w, 0.94 * w)
@@ -191,15 +220,25 @@ function Wishing({
 
                 nextSpawn -= dt
                 if (nextSpawn <= 0 && queue.length) {
-                    spawn(queue.shift())
-                    nextSpawn = rand(1.2, 2.8) * (reduce ? 1.4 : 1)
+                    const active = stars.reduce((n, s) => n + (s.state === 'fall' ? 1 : 0), 0)
+                    if (active >= maxActive()) {
+                        nextSpawn = 0.25
+                    } else {
+                        spawn(queue.shift())
+                        nextSpawn = rand(0.7, 1.6) * (reduce ? 1.4 : 1)
+                    }
                 }
-            } else if (burst) {
+            } else if (phase === 'burst' && burst) {
                 burst.t = Math.min(burst.t + dt * 1000, burstMs)
                 if (burst.t >= burstMs && !done) {
                     done = true
                     caughtCbRef.current()
                 }
+            } else if (phase === 'release') {
+                relT += dt * 1000
+                // naik pelan; saat reduced motion hanya memudar
+                if (burst) burst.y = burst.y0 - (reduce ? 0 : Math.min(1, relT / relMs) * h * 0.22)
+                if (relT >= relMs) resetGame()
             }
 
             for (let i = stars.length - 1; i >= 0; i--) {
@@ -321,7 +360,11 @@ function Wishing({
                 ctx.translate((Math.random() - 0.5) * k, (Math.random() - 0.5) * k)
             }
             stars.forEach(drawStar)
-            if (burst) drawBurst()
+            if (burst) {
+                ctx.globalAlpha = phase === 'release' ? Math.max(0, 1 - relT / relMs) : 1
+                drawBurst()
+                ctx.globalAlpha = 1
+            }
             ctx.restore()
         }
 
@@ -334,7 +377,7 @@ function Wishing({
             draw()
             // Setelah ledakan selesai hanya bintang tertangkap yang tersisa: tidak ada yang bergerak lagi.
             // Hentikan loop agar HP tidak menggambar ulang 60fps di belakang form (backdrop blur).
-            if (done && stars.every((s) => s.state === 'caught')) {
+            if (phase === 'burst' && done && stars.every((s) => s.state === 'caught')) {
                 settled = true
                 raf = 0
                 return
@@ -343,13 +386,28 @@ function Wishing({
         }
         raf = requestAnimationFrame(frame)
 
+        // Release: hanya setelah ledakan selesai. Hidupkan lagi loop yang sudah berhenti (settled).
+        releaseRef.current = () => {
+            if (phase !== 'burst' || !done) return
+            phase = 'release'
+            relT = 0
+            done = false
+            if (burst) burst.y0 = burst.y
+            if (settled) {
+                settled = false
+                last = performance.now()
+                raf = requestAnimationFrame(frame)
+            }
+        }
+
         return () => {
             cancelAnimationFrame(raf)
             canvas.removeEventListener('pointerdown', onPointerDown)
             ro.disconnect()
             catchRef.current = null
+            releaseRef.current = null
         }
-    }, [round, alreadyDone])
+    }, [alreadyDone])
 
     // Fokus: panel "sudah jadi bintang" saat mount; kartu resume saat form ditutup
     useEffect(() => {
@@ -387,7 +445,7 @@ function Wishing({
         sfx.click()
         setFormOpen(false)
         setCaught(false)
-        setRound((r) => r + 1)
+        releaseRef.current?.()
     }
 
     const handleReopen = () => {
@@ -453,8 +511,14 @@ function Wishing({
                 <h2 className={styles.title}>
                     Make <em>a wish</em>
                 </h2>
-                <p className={styles.hint}>Find the brightest falling star</p>
             </div>
+
+            {/* Petunjuk tengah: memudar sendiri, tidak menghalangi ketukan */}
+            {!caught && !hintGone && (
+                <p className={styles.centerHint} aria-hidden="true">
+                    Catch the brightest star to make a wish
+                </p>
+            )}
 
             <button className={styles.skip} onClick={handleSkip}>
                 Skip to gallery
@@ -491,6 +555,7 @@ function Wishing({
             {formOpen && (
                 <WishForm
                     initialDraft={draft}
+                    initialName={visitor?.name}
                     onClose={handleFormClose}
                     onSaved={handleSaved}
                     onDone={handleDone}

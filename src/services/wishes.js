@@ -14,7 +14,7 @@ export const PAGE_SIZE = 12
 export const CATEGORIES = [
     { id: 'feedback', label: 'Feedback' },
     { id: 'suggestion', label: 'Suggestion' },
-    { id: 'developer', label: 'About the developer' },
+    { id: 'developer', label: 'To the developer (Raz)' },
     { id: 'wish', label: 'Just a wish' },
 ]
 const CATEGORY_IDS = new Set(CATEGORIES.map((c) => c.id))

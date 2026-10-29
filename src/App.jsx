@@ -71,9 +71,10 @@ const HINT_BTN = {
   touchAction: 'manipulation',
 }
 
-// 'secret' (Secret Ending) SENGAJA tidak masuk daftar ini: bukan bagian navigasi bebas,
-// hanya terbuka lewat submit wish yang sukses. NavDots/ProgressBar memakai 'wishing' saat di 'secret'.
-const SECTION_IDS = ['intro', 'solar', 'phenomena', 'deepspace', 'ending', 'wishing', 'gallery']
+// 'wishing' dan 'secret' SENGAJA tidak masuk daftar ini: bukan navigasi bebas,
+// hanya terbuka lewat Ending (dan submit wish yang sukses untuk 'secret').
+// NavDots/ProgressBar memakai 'ending' saat di 'wishing' atau 'secret'.
+const SECTION_IDS = ['intro', 'solar', 'phenomena', 'deepspace', 'ending', 'gallery']
 
 // Kedalaman starfield per section (0 = terang penuh, 1 = paling redup).
 // Semua id section, termasuk 'secret'. Id yang tidak ada di peta jatuh ke 0.
@@ -340,8 +341,8 @@ export default function App() {
   }, [])
   const closeMessage = useCallback(() => setMessage(null), [])
 
-  // Secret Ending tidak punya titik sendiri di NavDots/ProgressBar, jadi ikut 'wishing'
-  const navSection = activeSection === 'secret' ? 'wishing' : activeSection
+  // Wishing dan Secret Ending tidak punya titik sendiri di NavDots/ProgressBar, jadi ikut 'ending'
+  const navSection = activeSection === 'wishing' || activeSection === 'secret' ? 'ending' : activeSection
   const currentIdx = SECTION_IDS.indexOf(navSection)
   const progress = Math.max(0, currentIdx / (SECTION_IDS.length - 1))
 

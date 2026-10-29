@@ -271,32 +271,32 @@ export const GALAXY_POINTS = [
 export const UNIVERSE_LEVELS = [
   {
     id: 'earth', short: 'Earth', name: 'Planet Earth', ly: 1.347e-9,
-    tagline: 'Everything you have ever touched lives on this single sphere.',
-    size: '12,742 km', light: ['Light crosses it in', '0.04 seconds'], holds: '~8 billion people',
+    fact: '12,742 km across. Light crosses it in 0.04 seconds.',
+    line: 'Everything you have ever touched lives on this one sphere.',
   },
   {
     id: 'solar', short: 'Solar System', name: 'The Solar System', ly: 9.49e-4,
-    tagline: 'Sunlight needs 8 minutes to reach Earth, and 4 hours to reach Neptune.',
-    size: '~9 billion km (60 AU)', light: ['Light crosses it in', '8.3 hours'], holds: '1 star · 8 planets · 400+ moons',
+    fact: 'About 9 billion km across. Light crosses it in 8.3 hours.',
+    line: 'Eight planets circle one star, and we live on the third.',
   },
   {
     id: 'neighbors', short: 'Neighbors', name: 'Stellar Neighborhood', ly: 40,
-    tagline: 'Even our closest neighbor is about 270,000 times farther away than the Sun.',
-    size: '40 light-years', light: ['Light crosses it in', '40 years'], holds: '~80 star systems',
+    fact: '40 light-years across, with about 80 star systems. Light crosses it in 40 years.',
+    line: 'Even our nearest neighbor is a very long way from home.',
   },
   {
     id: 'milkyway', short: 'Milky Way', name: 'The Milky Way', ly: 1e5,
-    tagline: 'Our Sun is one of hundreds of billions of stars, 26,000 light-years from the center.',
-    size: '~100,000 light-years', light: ['Light crosses it in', '100,000 years'], holds: '100 to 400 billion stars',
+    fact: 'About 100,000 light-years across. Light crosses it in 100,000 years.',
+    line: 'Hundreds of billions of stars, and our Sun is just one of them.',
   },
   {
     id: 'localgroup', short: 'Local Group', name: 'The Local Group', ly: 1e7,
-    tagline: 'Our galaxy is bound to dozens of others. Andromeda is the closest large one.',
-    size: '~10 million light-years', light: ['Light crosses it in', '10 million years'], holds: '80+ galaxies',
+    fact: 'About 10 million light-years across, with 80+ galaxies. Light crosses it in 10 million years.',
+    line: 'Even galaxies keep each other company.',
   },
   {
     id: 'universe', short: 'Universe', name: 'The Observable Universe', ly: 9.3e10,
-    tagline: 'Beyond this edge, light has not had time to reach us. Not yet.',
-    size: '~93 billion light-years', light: ['Oldest light is', '13.8 billion years old'], holds: '200 billion to 2 trillion galaxies',
+    fact: 'About 93 billion light-years across. The oldest light is 13.8 billion years old.',
+    line: 'Beyond this edge, light has not had time to reach us. Not yet.',
   },
 ]

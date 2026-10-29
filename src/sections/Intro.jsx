@@ -7,9 +7,17 @@ import styles from './Intro.module.css'
 const HOLD_MS = 2500      // lama menahan tombol
 const RELEASE_MS = 700    // lama progres kembali tenang saat dilepas
 const MOON_KM = 384400
-const EARTH_PX = 220      // diameter Bumi (px) di wrapper; dipakai untuk hitung skala transisi
+// Rasio diameter Bumi terhadap lebar .earthWrap (220/260). Tetap karena canvas
+// selalu 640/260 dari wrapper (desktop dan HP). Ukuran Bumi sebenarnya dihitung
+// dari offsetWidth wrapper, bukan konstanta px.
+const EARTH_RATIO = 220 / 260
 const MOON_R = 3.6
 const ISS_R = 2.75
+
+// Posisi Bumi di grid Solar System (HP). Harus sinkron dengan Planet3D di SolarSystem.jsx:
+// posX = (0 - 0.5) * 4.2, posY = (1.5 - 1) * spacingY + yOffset = 0.5 * 4.8 - 0.8
+const SOLAR_MOBILE_POS = { x: -2.1, y: 1.6 }
+const SOLAR_DESKTOP_POS = { x: 2.5, y: 3 }
 
 function makeMoonTex() {
   const c = document.createElement('canvas')
@@ -189,11 +197,11 @@ function Intro({ onNext, isWarping = false, warpStartTime = 0, travelMs = 2800 }
     const mobile = vw < 768
     const camZ = mobile ? 34 : 26                                   // sama dgn CameraRig overview
     const unit = vh / (2 * camZ * Math.tan(THREE.MathUtils.degToRad(20))) // px per unit scene Solar
-    const posX = mobile ? -2.1 : 2.5                                // posisi Earth (index 2) di grid
-    const posY = mobile ? 1.6 : 3
-    const tx = vw / 2 + posX * unit - (r.left + r.width / 2)
-    const ty = vh / 2 - posY * unit - (r.top + r.height / 2)
-    const s = ((68 / 65) * 2 * unit) / EARTH_PX                     // radius Earth = 68/65
+    const pos = mobile ? SOLAR_MOBILE_POS : SOLAR_DESKTOP_POS
+    const tx = vw / 2 + pos.x * unit - (r.left + r.width / 2)
+    const ty = vh / 2 - pos.y * unit - (r.top + r.height / 2)
+    const earthPx = el.offsetWidth * EARTH_RATIO                    // ukuran Bumi sebenarnya (tidak terpengaruh transform)
+    const s = ((68 / 65) * 2 * unit) / earthPx                      // radius Earth = 68/65
     el.style.transitionDuration = `${travelMs}ms`
     el.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`
   }, [isWarping, travelMs])
@@ -233,13 +241,10 @@ function Intro({ onNext, isWarping = false, warpStartTime = 0, travelMs = 2800 }
       <div className={`${styles.content} ${isWarping ? styles.contentHidden : ''}`}>
         <p ref={distRef} className={`t-label ${styles.coords}`}>3.844 × 10⁵ km from home</p>
         <h1 className={styles.heading}>
-          Welcome aboard,<br /><em>astronaut.</em>
+          Welcome aboard,<br /><em>captain.</em>
         </h1>
         <p className={styles.sub}>
           Fasten your seatbelt. Our journey begins.
-        </p>
-        <p className={styles.local} lang="id">
-          Kencangkan sabuk pengamanmu.
         </p>
         <button
           ref={btnRef}

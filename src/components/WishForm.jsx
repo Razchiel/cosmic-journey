@@ -28,14 +28,19 @@ const DEFAULT_DRAFT = {
 
 /**
  * Props:
- *  - initialDraft: isi form yang tersimpan saat form ditutup (opsional)
+ *  - initialDraft: isi form yang tersimpan saat form ditutup (opsional, menang atas initialName)
+ *  - initialName: nama awal dari visitor.name (opsional, bisa diedit)
  *  - onClose(draft): form ditutup tanpa kirim
  *  - onSaved(record): kiriman sukses (App menyimpannya sebagai mySubmission)
  *  - onDone(): animasi bintang naik selesai, lanjut ke Secret Ending
  */
-export default function WishForm({ initialDraft, onClose, onSaved, onDone }) {
+export default function WishForm({ initialDraft, initialName, onClose, onSaved, onDone }) {
     const uid = useId()
-    const [draft, setDraft] = useState({ ...DEFAULT_DRAFT, ...initialDraft })
+    const [draft, setDraft] = useState({
+        ...DEFAULT_DRAFT,
+        name: String(initialName || '').slice(0, NAME_MAX),
+        ...initialDraft,
+    })
     const [hoverRating, setHoverRating] = useState(0)
     const [attempted, setAttempted] = useState(false)
     const [status, setStatus] = useState('idle') // idle | sending | rise

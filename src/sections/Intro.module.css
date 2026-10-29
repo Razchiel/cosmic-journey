@@ -116,7 +116,8 @@
   animation: earthFloat 7s ease-in-out infinite;
 }
 
-/* Canvas lebih besar dari Bumi agar orbit Bulan & ISS tidak terpotong */
+/* Canvas lebih besar dari Bumi agar orbit Bulan & ISS tidak terpotong.
+   Rasio canvas : wrapper harus tetap 640 : 260 (dipakai hitung skala berangkat). */
 .earthCanvas {
   position: absolute !important;
   left: 50%;
@@ -252,20 +253,6 @@
   color: var(--text-secondary);
   text-shadow: var(--text-shadow-soft);
   max-width: var(--measure);
-  margin: 0 auto 0.5rem;
-  line-height: var(--lh-body);
-  letter-spacing: 0.02em;
-}
-
-/* Sentuhan lokal: baris kecil Bahasa Indonesia di bawah subteks */
-.local {
-  font-family: var(--font-display);
-  font-size: var(--fs-body-lg);
-  font-style: italic;
-  font-weight: var(--fw-regular);
-  color: var(--text-muted);
-  text-shadow: var(--text-shadow-soft);
-  max-width: var(--measure);
   margin: 0 auto 2.6rem;
   line-height: var(--lh-body);
   letter-spacing: 0.02em;
@@ -350,19 +337,46 @@
 }
 
 @media (max-width: 767px) {
+
+  /* HUD: lebar dibatasi supaya label membungkus rapi dan tidak menabrak
+     pill MusicPlayer mini (kanan atas, sekitar 52px) maupun Bumi */
   .hud {
     top: 1rem;
     left: 1rem;
-    /* Label dibiarkan membungkus supaya tidak menabrak konstelasi (.sky) di kanan atas */
-    max-width: 11.5rem;
+    max-width: 10rem;
   }
 
   .hudLabel {
-    letter-spacing: 0.1em;
+    letter-spacing: 0.08em;
+    line-height: 1.35;
   }
 
   .clock {
     font-size: 1.15rem;
+  }
+
+  .hudIss {
+    align-items: flex-start;
+    gap: 7px;
+    margin-top: 0.7rem;
+  }
+
+  .issDot {
+    margin-top: 0.3rem;
+  }
+
+  /* Bumi diperkecil (wrapper 260 jadi 168, canvas 640 jadi 414: rasio 2,46 tetap)
+     dan didorong turun supaya ada ruang di bawah HUD */
+  .earthWrap {
+    width: 168px;
+    height: 168px;
+    margin: 5.5rem auto 2rem;
+  }
+
+  .earthCanvas {
+    width: 414px !important;
+    height: 414px !important;
+    margin: -207px 0 0 -207px;
   }
 
   .content::before {
@@ -374,8 +388,33 @@
     letter-spacing: 0.14em;
   }
 
-  .local {
-    margin-bottom: 2.2rem;
+  .content .coords {
+    margin-bottom: 0.9rem;
+  }
+
+  .heading {
+    font-size: clamp(2.2rem, 9.5vw, 2.6rem);
+    margin-bottom: 1rem;
+  }
+
+  .sub {
+    font-size: 1rem;
+    margin-bottom: 1.8rem;
+  }
+}
+
+/* HP pendek (layar landscape kecil atau bar browser tebal) */
+@media (max-width: 767px) and (max-height: 620px) {
+  .earthWrap {
+    width: 148px;
+    height: 148px;
+    margin: 4.5rem auto 1.5rem;
+  }
+
+  .earthCanvas {
+    width: 364px !important;
+    height: 364px !important;
+    margin: -182px 0 0 -182px;
   }
 }
 

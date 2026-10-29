@@ -42,8 +42,21 @@ const sig2 = (n) => {
   return (Math.round(n / p) * p).toLocaleString('en-US')
 }
 
+const SWIPE_MIN = 48 // px, ambang geser horizontal di panggung
+
+function InfoBody({ lv }) {
+  return (
+    <>
+      <h3 className={styles.name}>{lv.name}</h3>
+      <p className={styles.fact}>{lv.fact}</p>
+      <p className={styles.tagline}>{lv.line}</p>
+    </>
+  )
+}
+
 export default function UniverseScale() {
   const [v, setV] = useState(0)          // posisi slider (float, 0..5)
+  const [touched, setTouched] = useState(false) // sudah ada interaksi pertama
   const vRef = useRef(0)
   const target = useRef(0)
   const dragging = useRef(false)
@@ -57,6 +70,7 @@ export default function UniverseScale() {
   const sunRef = useRef(null)
   const theta = useRef(0.6)
   const inView = useRef(true)
+  const swipe = useRef(null)
   // Titik tujuan tiap scene di dalam scene berikutnya (index = scene induk)
   const anchors = useRef([null, EARTH_ANCHOR, [CX, CY], sunAt(0.6), [CX, CY], [CX, CY]])
 
@@ -138,7 +152,9 @@ export default function UniverseScale() {
     raf.current = requestAnimationFrame(step)
   }, [])
 
+  // goTo hanya dipanggil dari aksi pengguna, jadi cukup di sini menandai "sudah dipakai"
   const goTo = useCallback((i) => {
+    setTouched(true)
     target.current = clamp(i, 0, LAST)
     if (reduce.current) { vRef.current = target.current; setV(target.current); return }
     if (!raf.current) animate()
@@ -153,6 +169,7 @@ export default function UniverseScale() {
   const onDown = (e) => {
     e.currentTarget.setPointerCapture(e.pointerId)
     dragging.current = true
+    setTouched(true)
     cancelAnimationFrame(raf.current); raf.current = 0
     fromPointer(e)
   }
@@ -170,6 +187,22 @@ export default function UniverseScale() {
     else if (k === 'End') { e.preventDefault(); goTo(LAST) }
   }
 
+  // Geser horizontal di panggung (sentuh/pena saja; scroll vertikal tetap lewat touch-action: pan-y)
+  const onStageDown = (e) => {
+    if (e.pointerType === 'mouse') return
+    swipe.current = { x: e.clientX, y: e.clientY }
+  }
+  const onStageUp = (e) => {
+    const s = swipe.current
+    swipe.current = null
+    if (!s) return
+    const dx = e.clientX - s.x, dy = e.clientY - s.y
+    if (Math.abs(dx) > SWIPE_MIN && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      goTo(target.current + (dx < 0 ? 1 : -1))
+    }
+  }
+  const onStageCancel = () => { swipe.current = null }
+
   const cur = LEVELS[level]
   const factor = level > 0 ? sig2(cur.ly / LEVELS[level - 1].ly) : null
 
@@ -177,10 +210,15 @@ export default function UniverseScale() {
     <figure ref={figRef} className={styles.figure}>
       <figcaption className={styles.caption}>
         <span className="t-label">Scale of the Universe</span>
-        <span className={styles.hint}>Drag the slider to zoom out</span>
+        <span className={`${styles.hint} ${touched ? styles.hintOff : ''}`}>Tap + or drag the slider to zoom out</span>
       </figcaption>
 
-      <div className={styles.stage}>
+      <div
+        className={styles.stage}
+        onPointerDown={onStageDown}
+        onPointerUp={onStageUp}
+        onPointerCancel={onStageCancel}
+      >
         {SCENES.map((Scene, i) => (
           <div key={i} ref={(el) => { layers.current[i] = el }} className={styles.scene} aria-hidden="true">
             {i === 3 ? <Scene diskRef={diskRef} sunRef={sunRef} /> : <Scene />}
@@ -190,20 +228,23 @@ export default function UniverseScale() {
         {factor && <div className={styles.factor}>×{factor} wider than the previous view</div>}
       </div>
 
+      {/* Semua level ditumpuk di satu sel grid: tinggi panel = level terpanjang, jadi tidak melompat */}
       <div className={styles.info} aria-live="polite">
+        {LEVELS.map((l) => (
+          <div key={l.id} className={styles.sizer} aria-hidden="true">
+            <InfoBody lv={l} />
+          </div>
+        ))}
         <div key={cur.id} className={styles.infoInner}>
-          <h3 className={styles.name}>{cur.name}</h3>
-          <p className={styles.tagline}>{cur.tagline}</p>
-          <dl className={styles.stats}>
-            <div><dt>Diameter</dt><dd>{cur.size}</dd></div>
-            <div><dt>{cur.light[0]}</dt><dd>{cur.light[1]}</dd></div>
-            <div><dt>Contains</dt><dd>{cur.holds}</dd></div>
-          </dl>
+          <InfoBody lv={cur} />
         </div>
       </div>
 
       <div className={styles.controls}>
-        <button className={styles.step} onClick={() => goTo(level - 1)} disabled={level === 0} aria-label="Zoom in">−</button>
+        <button className={styles.step} onClick={() => goTo(level - 1)} disabled={level === 0} aria-label="Closer, zoom in">
+          <span className={styles.stepIcon} aria-hidden="true">−</span>
+          <span className={styles.stepText} aria-hidden="true">Closer</span>
+        </button>
 
         <div className={styles.trackPad}>
           <div
@@ -246,7 +287,10 @@ export default function UniverseScale() {
           </div>
         </div>
 
-        <button className={styles.step} onClick={() => goTo(level + 1)} disabled={level === LAST} aria-label="Zoom out">+</button>
+        <button className={styles.step} onClick={() => goTo(level + 1)} disabled={level === LAST} aria-label="Farther, zoom out">
+          <span className={`${styles.stepIcon} ${!touched ? styles.nudge : ''}`} aria-hidden="true">+</span>
+          <span className={styles.stepText} aria-hidden="true">Farther</span>
+        </button>
       </div>
       <p className={styles.note}>Schematic illustrations, not to scale.</p>
     </figure>

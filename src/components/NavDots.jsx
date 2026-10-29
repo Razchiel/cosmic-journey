@@ -1,13 +1,13 @@
 import { memo } from 'react'
 import styles from './NavDots.module.css'
 
+// 'wishing' dan 'secret' sengaja tidak ada di sini: hanya terbuka lewat Ending.
 const SECTIONS = [
   { id: 'intro', label: 'Departure' },
   { id: 'solar', label: 'Solar System' },
   { id: 'phenomena', label: 'Phenomena' },
   { id: 'deepspace', label: 'Deep Space' },
   { id: 'ending', label: 'Reflection' },
-  { id: 'wishing', label: 'Wishing Star' },
   { id: 'gallery', label: 'Astronaut Gallery' },
 ]
 

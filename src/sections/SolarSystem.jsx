@@ -229,7 +229,7 @@ function CameraRig({ focusedPos }) {
 }
 
 // ── 4. Komponen 3D Planet (Adaptif Mobile 2x4 & Desktop 4x2) ────────
-function Planet3D({ data, index, isFocused, onClick }) {
+function Planet3D({ data, index, labelHidden, onClick }) {
   const planetGroup = useRef()
   const ringMesh = useRef()
   const glowSprite = useRef()
@@ -240,9 +240,12 @@ function Planet3D({ data, index, isFocused, onClick }) {
   const col = isMobile ? (index % 2) : (index % 4)
   const row = isMobile ? Math.floor(index / 2) : Math.floor(index / 4)
   const spacingX = isMobile ? 4.2 : 5.0
-  const spacingY = isMobile ? 4.0 : 6.0   // sebelumnya 4.4
+  // HP: spacingY 4.8 (sebelumnya 4.0) karena label kini di atas planet.
+  // Offset -0.8 (sebelumnya -0.4) menurunkan grid sedikit. Posisi Bumi tetap (-2.1, 1.6),
+  // jadi SOLAR_MOBILE_POS di Intro.jsx tidak perlu diubah. Jika angka ini diubah, sinkronkan di sana.
+  const spacingY = isMobile ? 4.8 : 6.0
   const posX = isMobile ? (col - 0.5) * spacingX : (col - 1.5) * spacingX
-  const posY = isMobile ? (1.5 - row) * spacingY - 0.4 : (row === 0 ? (spacingY / 2) : -(spacingY / 2))
+  const posY = isMobile ? (1.5 - row) * spacingY - 0.8 : (row === 0 ? (spacingY / 2) : -(spacingY / 2))
 
   const baseSize = parseInt(data.size) || 40
   const radius = baseSize / 65
@@ -358,8 +361,8 @@ function Planet3D({ data, index, isFocused, onClick }) {
         )}
       </group>
 
-      <Html position={[0, -radius - 1.2, 0]} center style={{ pointerEvents: 'none' }}>
-        <div className={styles.planetLabel} style={{ opacity: isFocused ? 0 : 1 }}>
+      <Html position={[0, radius + 0.7, 0]} center style={{ pointerEvents: 'none' }}>
+        <div className={styles.planetLabel} style={{ opacity: labelHidden ? 0 : 1 }}>
           {data.name}
         </div>
       </Html>
@@ -448,7 +451,7 @@ function SolarSystem({ onFact, onNext }) {
                 key={planet.id}
                 data={planet}
                 index={i}
-                isFocused={activePlanet === planet.id}
+                labelHidden={focusedPos !== null}
                 onClick={(pos) => handlePlanetClick(planet, pos)}
               />
             ))}

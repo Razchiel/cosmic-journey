@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, memo } from 'react'
+import { useState, useEffect, useMemo, useRef, memo } from 'react'
 import { sfx } from '../hooks/useSfx.js'
 import styles from './Ending.module.css'
 
@@ -90,7 +90,7 @@ function wrapLines(g, text, maxWidth) {
   return lines
 }
 
-async function drawShareCard({ name, from, message, points, coords }) {
+async function drawShareCard({ name, message, points, coords }) {
   try {
     await Promise.all([
       document.fonts.load('italic 300 60px "Cormorant Garamond"'),
@@ -207,7 +207,7 @@ async function drawShareCard({ name, from, message, points, coords }) {
   } while (g.measureText(`Dear ${name},`).width > 880 && size > 30)
   g.fillText(`Dear ${name},`, W / 2, 770)
 
-  // message: font mengecil sampai muat di atas tanda tangan/footer
+  // message: font mengecil sampai muat di atas footer
   g.fillStyle = '#e0e5ff'
   let msgSize = 54
   let lines = []
@@ -219,23 +219,6 @@ async function drawShareCard({ name, from, message, points, coords }) {
   }
   const lh = msgSize * 1.45
   lines.forEach((ln, i) => g.fillText(ln, W / 2, 870 + i * lh))
-
-  // signature (untuk "someone else")
-  if (from) {
-    const sigY = Math.min(870 + (lines.length - 1) * lh + 105, 1185)
-    g.fillStyle = MUTED
-    g.font = `400 24px ${sans}`
-    setSpacing(3)
-    g.fillText('WITH COSMIC LOVE,', W / 2, sigY - 44)
-    setSpacing(0)
-    let sigSize = 56
-    g.fillStyle = '#ff99cc'
-    do {
-      g.font = `italic 300 ${sigSize}px ${serif}`
-      sigSize -= 4
-    } while (g.measureText(from).width > 700 && sigSize > 28)
-    g.fillText(from, W / 2, sigY + 8)
-  }
 
   // footer
   g.fillStyle = MUTED
@@ -274,32 +257,76 @@ function ModalStars() {
   )
 }
 
-// ── KOMPONEN HEART SUPERNOVA (LEDAKAN HATI RANDOM) ────────────────────
-function HeartSupernovas() {
+// ── KOMPONEN HEART SUPERNOVA (LEDAKAN HATI DI PINGGIR KARTU) ──────────
+const HEART_COLORS = ['#ff99cc', '#ffb3e6', '#e6ccff', '#ffccff', '#ffd700']
+
+// Pilih titik (px, koordinat viewport) di pita kosong di luar kartu:
+// atas, bawah, kiri, kanan. Pita yang terlalu tipis dilewati.
+function pickHeartSpot(card) {
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  const PAD = 28
+  const MIN = 40
+  const r = card ? card.getBoundingClientRect() : null
+
+  const bands = r
+    ? [
+      { x0: 0, x1: vw, y0: 0, y1: r.top },
+      { x0: 0, x1: vw, y0: r.bottom, y1: vh },
+      { x0: 0, x1: r.left, y0: r.top, y1: r.bottom },
+      { x0: r.right, x1: vw, y0: r.top, y1: r.bottom },
+    ].filter((b) => b.x1 - b.x0 >= MIN && b.y1 - b.y0 >= MIN)
+    : []
+
+  if (!bands.length) {
+    // Kartu hampir memenuhi layar: sisakan tepi atas/bawah (hati boleh sedikit menyentuh tepi kartu)
+    return {
+      x: 24 + Math.random() * Math.max(vw - 48, 1),
+      y: Math.random() < 0.5 ? 22 : vh - 22,
+    }
+  }
+
+  const area = (b) => (b.x1 - b.x0) * (b.y1 - b.y0)
+  let pick = Math.random() * bands.reduce((s, b) => s + area(b), 0)
+  let band = bands[bands.length - 1]
+  for (const b of bands) {
+    pick -= area(b)
+    if (pick <= 0) { band = b; break }
+  }
+  const px = Math.min(PAD, (band.x1 - band.x0) / 2)
+  const py = Math.min(PAD, (band.y1 - band.y0) / 2)
+  return {
+    x: band.x0 + px + Math.random() * (band.x1 - band.x0 - px * 2),
+    y: band.y0 + py + Math.random() * (band.y1 - band.y0 - py * 2),
+  }
+}
+
+function HeartSupernovas({ cardRef }) {
   const [novas, setNovas] = useState([])
 
   useEffect(() => {
     const interval = setInterval(() => {
+      const spot = pickHeartSpot(cardRef.current)
       setNovas((prev) => {
         const newNova = {
           id: Date.now() + Math.random(),
-          x: Math.random() * 100,
-          y: Math.random() * 100,
-          scale: Math.random() * 1.5 + 1.5, // Skala acak
-          color: ['#ff99cc', '#ffb3e6', '#e6ccff', '#ffccff', '#ffd700'][Math.floor(Math.random() * 5)]
+          x: spot.x,
+          y: spot.y,
+          scale: Math.random() * 1.2 + 1.2,
+          color: HEART_COLORS[Math.floor(Math.random() * HEART_COLORS.length)]
         }
         return [...prev.slice(-4), newNova] // Maksimal 5 ledakan di DOM
       })
     }, 1800) // Meledak setiap 1.8 detik
 
     return () => clearInterval(interval)
-  }, [])
+  }, [cardRef])
 
   return (
     <div className={styles.heartNovaWrap}>
       {novas.map((nova) => (
         <div key={nova.id} className={styles.heartNova} style={{
-          left: `${nova.x}%`, top: `${nova.y}%`,
+          left: `${nova.x}px`, top: `${nova.y}px`,
           '--nova-scale': nova.scale,
           '--nova-color': nova.color
         }}>
@@ -315,8 +342,7 @@ function HeartSupernovas() {
 
 // ── KOMPONEN UTAMA ENDING ─────────────────────────────────────────────
 function Ending({ visitor, onReveal, onNext, onBackToChoices, resumeMessage = false }) {
-  const { name: recipient, sender, constellationPoints: constellation, finalMessage, coords, wishSubmitted } = visitor
-  const isOther = Boolean(sender)
+  const { name: recipient, constellationPoints: constellation, finalMessage, coords, wishSubmitted } = visitor
   const hasMessage = Boolean(finalMessage)
   // Wish sudah terkirim (datang dari Secret Ending): tombol utama kembali ke pilihan, bukan mengulang Wishing
   const canGoBackToChoices = Boolean(wishSubmitted && onBackToChoices)
@@ -324,36 +350,26 @@ function Ending({ visitor, onReveal, onNext, onBackToChoices, resumeMessage = fa
   const [isHovered, setIsHovered] = useState(false)
   // Kembali dari Secret Ending ("Stay with my constellation"): langsung buka pesan lagi
   const [modalState, setModalState] = useState(resumeMessage && hasMessage ? 'message' : 'closed')
-  const [formData, setFormData] = useState({ type: 'self', name: '', from: '', to: '', note: '' })
+  const [nameInput, setNameInput] = useState('')
   const [sharing, setSharing] = useState(false)
+  const cardRef = useRef(null)
 
   const handleOpenForm = () => {
     sfx.open()
     setModalState('form')
-    setFormData({ type: 'self', name: '', from: '', to: '', note: '' })
+    setNameInput('')
   }
 
   const handleReveal = (e) => {
     e.preventDefault()
 
-    let name = ''
-    let from = ''
-    let message = ''
-    if (formData.type === 'self') {
-      name = formData.name.trim()
-      if (!name) return
-      message = COSMIC_MESSAGES[Math.floor(Math.random() * COSMIC_MESSAGES.length)]
-    } else {
-      name = formData.to.trim()
-      from = formData.from.trim()
-      if (!name || !from) return
-      message = formData.note.trim() || COSMIC_MESSAGES[Math.floor(Math.random() * COSMIC_MESSAGES.length)]
-    }
+    const name = nameInput.trim()
+    if (!name) return
+    const message = COSMIC_MESSAGES[Math.floor(Math.random() * COSMIC_MESSAGES.length)]
 
     // Data pengunjung disimpan di App (state in-memory, tanpa localStorage)
     onReveal({
       name,
-      sender: from,
       finalMessage: message,
       constellationPoints: makeConstellation(name),
       coords: `${Math.random().toFixed(4)} N, ${Math.random().toFixed(4)} W`,
@@ -373,7 +389,7 @@ function Ending({ visitor, onReveal, onNext, onBackToChoices, resumeMessage = fa
     setSharing(true)
     sfx.click()
     try {
-      const blob = await drawShareCard({ name: recipient, from: sender, message: finalMessage, points: constellation, coords })
+      const blob = await drawShareCard({ name: recipient, message: finalMessage, points: constellation, coords })
       if (!blob) return
       const safe = recipient.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'cosmic'
       const file = new File([blob], `constellation-${safe}.png`, { type: 'image/png' })
@@ -476,68 +492,26 @@ function Ending({ visitor, onReveal, onNext, onBackToChoices, resumeMessage = fa
         {modalState === 'message' && (
           <>
             <ModalStars />
-            <HeartSupernovas />
+            <HeartSupernovas cardRef={cardRef} />
           </>
         )}
 
         {modalState === 'form' && (
           <div className={styles.modalBox}>
             <button className={styles.closeBtn} onClick={() => setModalState('closed')} aria-label="Close form">✕</button>
-            <h3 className={styles.modalTitle}>Set Transmission Target</h3>
+            <h3 className={styles.modalTitle}>What should the universe call you?</h3>
 
             <form onSubmit={handleReveal} className={styles.formContainer}>
-              <div className={styles.radioGroup}>
-                <label className={formData.type === 'self' ? styles.radioActive : ''}>
-                  <input type="radio" name="type" checked={formData.type === 'self'} onChange={() => setFormData({ ...formData, type: 'self' })} />
-                  For Myself
-                </label>
-                <label className={formData.type === 'other' ? styles.radioActiveOther : ''}>
-                  <input type="radio" name="type" checked={formData.type === 'other'} onChange={() => setFormData({ ...formData, type: 'other' })} />
-                  For Someone Else ✨
-                </label>
-              </div>
-
-              {formData.type === 'self' ? (
-                <input
-                  type="text"
-                  placeholder="Enter your name..."
-                  className={styles.nameInput}
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  required
-                  maxLength={30}
-                />
-              ) : (
-                <div className={styles.validationBox}>
-                  <p className={styles.validationHint}>Who is this transmission from, and for whom? 💌</p>
-                  <input
-                    type="text"
-                    placeholder="From (your name)..."
-                    className={styles.nameInput}
-                    value={formData.from}
-                    onChange={(e) => setFormData({ ...formData, from: e.target.value })}
-                    required
-                    maxLength={30}
-                  />
-                  <input
-                    type="text"
-                    placeholder="To (their name)..."
-                    className={styles.nameInput}
-                    value={formData.to}
-                    onChange={(e) => setFormData({ ...formData, to: e.target.value })}
-                    required
-                    maxLength={30}
-                  />
-                  <textarea
-                    placeholder="Write your own message, or leave it empty and the universe will write one"
-                    className={`${styles.nameInput} ${styles.noteInput}`}
-                    value={formData.note}
-                    onChange={(e) => setFormData({ ...formData, note: e.target.value })}
-                    rows={4}
-                    maxLength={240}
-                  />
-                </div>
-              )}
+              <input
+                type="text"
+                placeholder="Enter your name"
+                aria-label="Your name"
+                className={styles.nameInput}
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                required
+                maxLength={30}
+              />
 
               <button type="submit" className={styles.submitBtn}>Decode Message →</button>
             </form>
@@ -548,20 +522,13 @@ function Ending({ visitor, onReveal, onNext, onBackToChoices, resumeMessage = fa
           <div className={styles.ticketBox}>
             <button className={styles.closeBtn} onClick={handleCloseMessage} aria-label="Close message">✕</button>
 
-            <div className={styles.ticketContent}>
+            <div className={styles.ticketContent} ref={cardRef}>
               <LetterConstellation name={recipient} points={constellation} />
               <p className={`t-label ${styles.ticketLabel}`}>DECRYPTED TRANSMISSION</p>
               <h3 className={styles.recipientName}>
                 Dear <span className={styles.highlightName}>{recipient}</span>,
               </h3>
               <p className={styles.finalMessageText}>"{finalMessage}"</p>
-
-              {isOther && (
-                <div className={styles.signOff}>
-                  <p>With cosmic love,</p>
-                  <p className={styles.signature}>{sender}</p>
-                </div>
-              )}
 
               <div className={styles.ticketFooter}>
                 <span>COSMIC COORDS: {coords}</span>

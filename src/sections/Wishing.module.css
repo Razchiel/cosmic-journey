@@ -85,32 +85,38 @@
     color: #cfe0ff;
 }
 
-/* Petunjuk muncul, bertahan beberapa detik, lalu memudar */
-.hint {
-    font-family: var(--font-body);
-    font-size: 0.875rem;
+/* Petunjuk di tengah layar: tampil, bertahan beberapa detik, lalu memudar.
+   Tidak menangkap ketukan, jadi canvas di bawahnya tetap bisa di-tap. */
+.centerHint {
+    position: absolute;
+    left: 50%;
+    top: 42%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    width: min(86%, 22rem);
+    margin: 0;
+    text-align: center;
+    pointer-events: none;
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: clamp(1.125rem, 4.6vw, 1.5rem);
     font-weight: var(--fw-regular);
-    letter-spacing: 0.06em;
-    max-width: var(--measure);
-    line-height: 1.6;
-    color: var(--text-secondary);
+    line-height: 1.5;
+    color: var(--text-primary);
     text-shadow: var(--text-shadow-soft);
-    opacity: 0;
-    animation: hintLife 9s ease forwards;
+    animation: centerHintLife 7s ease forwards;
 }
 
-@keyframes hintLife {
+@keyframes centerHintLife {
     0% {
         opacity: 0;
-        transform: translateY(6px);
     }
 
     12% {
         opacity: 1;
-        transform: translateY(0);
     }
 
-    78% {
+    70% {
         opacity: 1;
     }
 
@@ -280,12 +286,16 @@
     }
 }
 
-/* HP landscape / layar pendek: judul dan petunjuk disembunyikan agar langit tetap lega */
+/* HP landscape / layar pendek: label kecil disembunyikan agar langit tetap lega.
+   Petunjuk tengah tetap tampil (memudar sendiri). */
 @media (max-height: 480px) {
-
-    .label,
-    .hint {
+    .label {
         display: none;
+    }
+
+    .centerHint {
+        top: 38%;
+        font-size: 1.0625rem;
     }
 
     .caption {
@@ -298,9 +308,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .hint {
-        animation-duration: 9s;
-        transform: none;
+    .centerHint {
+        animation-duration: 7s;
     }
 
     .resume {
