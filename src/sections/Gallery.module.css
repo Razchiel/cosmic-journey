@@ -243,6 +243,131 @@
     text-transform: uppercase;
 }
 
+/* First crew: dua tester pertama. Warna lewat --crew (R, G, B) per tone.
+   Border glow ada di ::after supaya yang dianimasikan hanya opacity (ringan). */
+.crewRed {
+    --crew: 255, 99, 120;
+}
+
+.crewYellow {
+    --crew: 255, 236, 140;
+}
+
+.crew {
+    border-color: rgba(var(--crew), 0.4);
+}
+
+.crew::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    border: 1px solid rgba(var(--crew), 0.9);
+    box-shadow: 0 0 16px rgba(var(--crew), 0.45), inset 0 0 12px rgba(var(--crew), 0.12);
+    opacity: 0.85;
+    pointer-events: none;
+    animation: crewGlow 3.6s ease-in-out infinite;
+}
+
+/* Kilau metalik menyisir garis border (conic-gradient berputar, dipotong jadi cincin tipis) */
+@property --sweep {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+}
+
+.crew::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    padding: 2px;
+    border-radius: inherit;
+    background: conic-gradient(from var(--sweep),
+            transparent 0deg,
+            transparent 250deg,
+            rgba(var(--crew), 0.85) 300deg,
+            #ffffff 328deg,
+            rgba(var(--crew), 0.9) 345deg,
+            transparent 360deg);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+    animation: crewSweep 4.5s linear infinite;
+}
+
+@keyframes crewSweep {
+    to {
+        --sweep: 360deg;
+    }
+}
+
+@keyframes crewGlow {
+
+    0%,
+    100% {
+        opacity: 0.35;
+    }
+
+    50% {
+        opacity: 1;
+    }
+}
+
+.crew .helmet {
+    color: rgb(var(--crew));
+    filter: drop-shadow(0 0 5px rgba(var(--crew), 0.7));
+}
+
+.crew .role {
+    color: rgb(var(--crew));
+    text-shadow: 0 0 8px rgba(var(--crew), 0.6);
+    animation: crewText 3.6s ease-in-out infinite;
+}
+
+@keyframes crewText {
+
+    0%,
+    100% {
+        text-shadow: 0 0 3px rgba(var(--crew), 0.25);
+    }
+
+    50% {
+        text-shadow: 0 0 10px rgba(var(--crew), 0.95), 0 0 18px rgba(var(--crew), 0.5);
+    }
+}
+
+.nameRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.2rem 0.5rem;
+}
+
+.crewBadge {
+    flex: 0 0 auto;
+    padding: 0.05rem 0.55rem;
+    border-radius: 50px;
+    font-family: var(--font-body);
+    font-size: var(--fs-small);
+    font-weight: var(--fw-medium);
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+}
+
+.rankGold {
+    background: linear-gradient(135deg, #ffe58a, #e0a92e);
+    color: #1a1200;
+    box-shadow: 0 0 8px rgba(255, 215, 100, 0.45);
+}
+
+.rankSilver {
+    background: linear-gradient(135deg, #f2f5fb, #a9b4c8);
+    color: #10141f;
+    box-shadow: 0 0 8px rgba(200, 212, 235, 0.4);
+}
+
 .cardHead {
     display: flex;
     align-items: center;
@@ -329,6 +454,100 @@
     font-size: var(--fs-small);
     font-weight: var(--fw-regular);
     color: var(--text-secondary);
+}
+
+/* Loved by Raz: hati kecil + tooltip. Tooltip rata kanan agar tidak keluar dari kartu. */
+.footRight {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.lovedWrap {
+    position: relative;
+    display: inline-flex;
+}
+
+.lovedBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin: -4px 0;
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: 50%;
+    color: #ff4d6d;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.lovedBtn svg {
+    width: 17px;
+    height: 17px;
+    filter: drop-shadow(0 0 4px rgba(255, 77, 109, 0.55));
+    transform-origin: center;
+    animation: lovedBeat 2.6s ease-in-out infinite;
+}
+
+.lovedBtn:focus-visible {
+    outline: 2px solid #aaccff;
+    outline-offset: 1px;
+}
+
+@keyframes lovedBeat {
+
+    0%,
+    30%,
+    100% {
+        transform: scale(1);
+    }
+
+    12% {
+        transform: scale(1.18);
+    }
+
+    20% {
+        transform: scale(1.05);
+    }
+}
+
+.lovedTip {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 6px);
+    padding: 0.2rem 0.65rem;
+    border: 1px solid rgba(255, 77, 109, 0.55);
+    border-radius: 50px;
+    background: rgba(5, 5, 31, 0.96);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: var(--fs-small);
+    font-weight: var(--fw-regular);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(4px);
+    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
+}
+
+.lovedWrap[data-open='true'] .lovedTip,
+.lovedBtn:focus-visible+.lovedTip {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+}
+
+@media (hover: hover) {
+    .lovedBtn:hover+.lovedTip {
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+    }
 }
 
 /* Skeleton */
@@ -487,15 +706,48 @@
     }
 }
 
+/* Glow First crew berhenti berdenyut, tetap tampil statis */
 @media (prefers-reduced-motion: reduce) {
 
     .dot,
     .card,
-    .skelLine {
+    .skelLine,
+    .crew::after,
+    .crew .role {
         animation: none;
     }
 
     .dot {
         opacity: 0.45;
     }
+}
+
+:global(body.comfort-mode) .crew::after,
+:global(body.comfort-mode) .crew .role {
+    animation: none;
+}
+
+/* Kilau yang bergerak disembunyikan saat reduced motion / Comfort (glow statis tetap tampil) */
+@media (prefers-reduced-motion: reduce) {
+    .crew::before {
+        display: none;
+    }
+}
+
+:global(body.comfort-mode) .crew::before {
+    display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .lovedBtn svg {
+        animation: none;
+    }
+
+    .lovedTip {
+        transition: none;
+    }
+}
+
+:global(body.comfort-mode) .lovedBtn svg {
+    animation: none;
 }

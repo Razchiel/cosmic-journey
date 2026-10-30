@@ -10,6 +10,14 @@ const SORTS = [
     { id: 'rating', label: 'Highest rated' },
 ]
 
+// Apresiasi untuk dua tester pertama. Dicocokkan lewat id wish asli (bukan nama),
+// jadi orang lain yang mengetik "Liya" atau "Rei" tidak mendapat highlight ini.
+// tone: nama class di CSS (crewRed / crewYellow). rank: urutan kiriman terawal.
+const FIRST_CREW = {
+    '9f7bf490-9f21-4218-8ff2-2b6bd327a901': { rank: 1, tone: 'crewRed', title: 'First crew' },     // Liya
+    '57a8b359-3db4-4f5e-bc83-46f0a5979f6a': { rank: 2, tone: 'crewYellow', title: 'Second crew' }, // Rei
+}
+
 // Bintang kecil berdenyut di latar (posisi deterministik, dihitung sekali)
 const STAR_DOTS = Array.from({ length: 32 }, (_, i) => {
     const r = (n) => {
@@ -57,22 +65,89 @@ function Stars({ value }) {
     )
 }
 
-function Card({ item, mine }) {
+// Kartu yang diberi hati oleh Raz. Tambahkan id wish lain di sini kapan saja.
+const LOVED_BY_RAZ = new Set([
+    '9f7bf490-9f21-4218-8ff2-2b6bd327a901', // Liya
+    '57a8b359-3db4-4f5e-bc83-46f0a5979f6a', // Rei
+])
+
+// Hati kecil ala "like": hover/fokus menampilkan teks. Di layar sentuh, ketuk untuk melihat teksnya.
+function LovedHeart() {
+    const [open, setOpen] = useState(false)
+    const timer = useRef(0)
+
+    useEffect(() => () => clearTimeout(timer.current), [])
+
+    const tap = () => {
+        clearTimeout(timer.current)
+        if (open) {
+            setOpen(false)
+            return
+        }
+        setOpen(true)
+        timer.current = setTimeout(() => setOpen(false), 2200)
+    }
+
     return (
-        <article className={`${styles.card} ${mine ? styles.mine : ''}`}>
+        <span className={styles.lovedWrap} data-open={open}>
+            <button
+                type="button"
+                className={styles.lovedBtn}
+                aria-label="Loved by Raz"
+                onClick={tap}
+                onBlur={() => setOpen(false)}
+            >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path
+                        fill="currentColor"
+                        d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+                    />
+                </svg>
+            </button>
+            <span className={styles.lovedTip} aria-hidden="true">Loved by Raz</span>
+        </span>
+    )
+}
+
+function Card({ item, mine }) {
+    const crew = FIRST_CREW[item.id]
+    const loved = LOVED_BY_RAZ.has(item.id)
+    const cls = [
+        styles.card,
+        mine ? styles.mine : '',
+        crew ? `${styles.crew} ${styles[crew.tone]}` : '',
+    ].join(' ')
+    return (
+        <article className={cls}>
             {mine && <span className={styles.yourBadge}>Your wish</span>}
             <header className={styles.cardHead}>
                 <Helmet />
                 <div className={styles.who}>
-                    <span className={styles.name}>{item.displayName}</span>
-                    <span className={styles.role}>{item.isAnonymous ? 'Anonymous astronaut' : 'Astronaut'}</span>
+                    <span className={styles.nameRow}>
+                        <span className={styles.name}>{item.displayName}</span>
+                        {crew && (
+                            <span
+                                className={`${styles.crewBadge} ${crew.rank === 1 ? styles.rankGold : styles.rankSilver}`}
+                                role="img"
+                                aria-label={`First crew member number ${crew.rank}`}
+                            >
+                                #{crew.rank}
+                            </span>
+                        )}
+                    </span>
+                    <span className={styles.role}>
+                        {crew ? crew.title : item.isAnonymous ? 'Anonymous astronaut' : 'Astronaut'}
+                    </span>
                 </div>
                 <Stars value={item.rating} />
             </header>
             <p className={styles.message}>{item.message}</p>
             <footer className={styles.cardFoot}>
                 <span className={styles.cat}>{CATEGORY_LABEL[item.category] ?? item.category}</span>
-                <time className={styles.time} dateTime={item.createdAt}>{timeAgo(item.createdAt)}</time>
+                <span className={styles.footRight}>
+                    {loved && <LovedHeart />}
+                    <time className={styles.time} dateTime={item.createdAt}>{timeAgo(item.createdAt)}</time>
+                </span>
             </footer>
         </article>
     )
