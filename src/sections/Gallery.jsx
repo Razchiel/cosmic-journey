@@ -65,12 +65,7 @@ function Stars({ value }) {
     )
 }
 
-// Kartu yang diberi hati oleh Raz. Tambahkan id wish lain di sini kapan saja.
-const LOVED_BY_RAZ = new Set([
-    '9f7bf490-9f21-4218-8ff2-2b6bd327a901', // Liya
-    '57a8b359-3db4-4f5e-bc83-46f0a5979f6a', // Rei
-])
-
+// Hati "Loved by Raz" dikendalikan kolom loved_by_raz di Supabase (dikirim get-wishes sebagai lovedByRaz).
 // Hati kecil ala "like": hover/fokus menampilkan teks. Di layar sentuh, ketuk untuk melihat teksnya.
 function LovedHeart() {
     const [open, setOpen] = useState(false)
@@ -111,7 +106,7 @@ function LovedHeart() {
 
 function Card({ item, mine }) {
     const crew = FIRST_CREW[item.id]
-    const loved = LOVED_BY_RAZ.has(item.id)
+    const loved = item.lovedByRaz === true
     const cls = [
         styles.card,
         mine ? styles.mine : '',

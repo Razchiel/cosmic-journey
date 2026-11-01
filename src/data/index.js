@@ -13,6 +13,8 @@ export const PLANETS = [
     gradient: 'radial-gradient(circle at 35% 35%, #d4b88a, #9a7a5a, #5a3a2a)',
     fact: 'The smallest planet is also the closest to the Sun. By day the surface reaches 430°C. At night it drops to −180°C, because there is almost no atmosphere to hold the heat.',
     orbit: '88 Earth days',
+    texture: '/images/planets/mercury.jpg',
+    spin: 0.05,
     moons: 0,
     type: 'Terrestrial'
   },
@@ -26,6 +28,8 @@ export const PLANETS = [
     gradient: 'radial-gradient(circle at 35% 35%, #f0e090, #c8a840, #907820)',
     fact: 'Venus is hotter than Mercury, even though it is farther from the Sun. Thick carbon dioxide clouds trap the heat and keep the surface near 465°C. It looks gentle from far away. Up close, no one could survive it.',
     orbit: '225 Earth days',
+    texture: '/images/planets/venus.jpg',
+    spin: 0.03,
     moons: 0,
     type: 'Terrestrial'
   },
@@ -39,6 +43,8 @@ export const PLANETS = [
     gradient: 'radial-gradient(circle at 35% 35%, #5ab0f0, #2a70c8, #0a3888)',
     fact: 'Our pale blue dot is the only world known to host life. A thin layer of air protects every person and every story we know from the cold of space.',
     orbit: '365 Earth days',
+    texture: '/images/earth_daymap.jpg',
+    spin: 0.2,
     moons: 1,
     type: 'Terrestrial'
   },
@@ -52,6 +58,8 @@ export const PLANETS = [
     gradient: 'radial-gradient(circle at 35% 35%, #f08050, #c05030, #801810)',
     fact: 'Iron oxide dust gives Mars its red color. River valleys suggest that liquid water once flowed there. Whether life ever did too is still an open question.',
     orbit: '687 Earth days',
+    texture: '/images/planets/mars.jpg',
+    spin: 0.19,
     moons: 2,
     type: 'Terrestrial'
   },
@@ -67,6 +75,8 @@ export const PLANETS = [
     bands: true,
     fact: "The Great Red Spot is a storm that has lasted more than 350 years, and it is bigger than Earth. Jupiter's strong gravity also deflects some asteroids that might otherwise threaten us.",
     orbit: '12 Earth years',
+    texture: '/images/planets/jupiter.jpg',
+    spin: 0.28,
     moons: 95,
     type: 'Gas Giant'
   },
@@ -81,6 +91,10 @@ export const PLANETS = [
     rings: true,
     fact: 'The rings span 282,000 km but are only about 10 to 100 meters thick. They are made of billions of pieces of ice and rock, from grains the size of pebbles to chunks as big as houses.',
     orbit: '29 Earth years',
+    texture: '/images/planets/saturn.jpg',
+    spin: 0.25,
+    tilt: 0.19,
+    ringInner: 1.25,
     moons: 146,
     type: 'Gas Giant'
   },
@@ -95,6 +109,8 @@ export const PLANETS = [
     rings: true,
     fact: 'Uranus spins on its side. Its axis is tilted 98°, probably from a huge collision long ago. Each pole gets 42 years of sunlight, then 42 years of darkness.',
     orbit: '84 Earth years',
+    texture: '/images/planets/uranus.jpg',
+    spin: 0.15,
     moons: 28,
     type: 'Ice Giant'
   },
@@ -108,6 +124,8 @@ export const PLANETS = [
     gradient: 'radial-gradient(circle at 35% 35%, #6688ff, #3344cc, #112288)',
     fact: 'Neptune has the fastest winds in the solar system, up to 2,100 km/h. That is faster than sound travels on Earth. Its largest moon, Triton, orbits backwards, a sign that it was captured from the Kuiper Belt.',
     orbit: '165 Earth years',
+    texture: '/images/planets/neptune.jpg',
+    spin: 0.17,
     moons: 16,
     type: 'Ice Giant'
   },

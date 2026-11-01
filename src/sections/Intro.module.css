@@ -68,6 +68,34 @@
   margin: 0.2rem 0 0;
 }
 
+.hudDate {
+  margin-top: 0.4rem;
+}
+
+.hudMoon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 0.35rem;
+}
+
+.moonIcon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  filter: drop-shadow(0 0 4px rgba(160, 190, 255, 0.5));
+}
+
+.hudMoonText {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.hudMission::before {
+  content: '·';
+  margin-right: 0.5em;
+}
+
 .hudIss {
   display: flex;
   align-items: center;
@@ -256,6 +284,7 @@
   margin: 0 auto 2.6rem;
   line-height: var(--lh-body);
   letter-spacing: 0.02em;
+  text-wrap: balance;
 }
 
 .beginBtn {
@@ -347,22 +376,49 @@
   }
 
   .hudLabel {
-    letter-spacing: 0.08em;
-    line-height: 1.35;
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    line-height: 1.3;
+  }
+
+  /* Bagian sekunder disembunyikan di HP agar HUD tidak sesak */
+  .hudExtra,
+  .hudMission {
+    display: none;
   }
 
   .clock {
-    font-size: 1.15rem;
+    font-size: 1.05rem;
+  }
+
+  .hudYear {
+    display: none;
+  }
+
+  .hudMoon {
+    gap: 7px;
+    margin-top: 0.3rem;
+  }
+
+  .hudMoonText {
+    flex-direction: column;
+  }
+
+  .hudMission::before {
+    content: none;
+    margin: 0;
   }
 
   .hudIss {
-    align-items: flex-start;
-    gap: 7px;
-    margin-top: 0.7rem;
+    align-items: center;
+    gap: 6px;
+    margin-top: 0.45rem;
   }
 
   .issDot {
-    margin-top: 0.3rem;
+    width: 5px;
+    height: 5px;
+    margin-top: 0;
   }
 
   /* Bumi diperkecil (wrapper 260 jadi 168, canvas 640 jadi 414: rasio 2,46 tetap)

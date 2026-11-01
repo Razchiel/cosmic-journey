@@ -3,13 +3,14 @@
 // Hanya status 'approved' dan is_private = false. Field status/is_private/ip_hash tidak pernah keluar.
 // Kontrak respons sama dengan getWishes() di src/services/wishes.js:
 //   { items, nextCursor, total, aggregate: { average, count } }
+// items[i].lovedByRaz (boolean) berasal dari kolom loved_by_raz.
 // ============================================================
 import { CATEGORY_IDS, db, fail, json, totalFromRange } from '../lib/shared.js'
 
 const PAGE_DEFAULT = 12
 const PAGE_MAX = 50
 const OFFSET_MAX = 2000
-const COLUMNS = 'id,display_name,is_anonymous,category,message,rating,created_at'
+const COLUMNS = 'id,display_name,is_anonymous,category,message,rating,created_at,loved_by_raz'
 
 const ORDER = {
     newest: 'created_at.desc,id.desc',
@@ -83,6 +84,7 @@ export default async (req) => {
             message: r.message,
             rating: r.rating,
             createdAt: r.created_at,
+            lovedByRaz: r.loved_by_raz === true,
         }))
 
         const nextCursor = offset + items.length < total && items.length > 0

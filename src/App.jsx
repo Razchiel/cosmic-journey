@@ -310,10 +310,22 @@ export default function App() {
     return () => document.body.classList.remove('comfort-mode')
   }, [comfort])
 
-  // Preload Solar System supaya perpindahan dari intro tidak tersendat
+  // Preload Solar System supaya perpindahan dari intro tidak tersendat.
+  // Tekstur planet diunduh bertahap di latar (tidak memblokir render Intro).
   useEffect(() => {
-    const t = setTimeout(() => import('./sections/SolarSystem.jsx'), 1500)
-    return () => clearTimeout(t)
+    let alive = true
+    let stop = () => { }
+    const t = setTimeout(() => {
+      import('./sections/SolarSystem.jsx')
+      import('./utils/planetTexture.js')
+        .then((m) => { if (alive) stop = m.preloadPlanetTextures() })
+        .catch(() => { })
+    }, 1500)
+    return () => {
+      alive = false
+      clearTimeout(t)
+      stop()
+    }
   }, [])
 
   // Preload section akhir + HomeWarp begitu pengunjung mencapai Deep Space,

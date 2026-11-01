@@ -1,9 +1,10 @@
-import { useState, useRef, useMemo, useEffect, Suspense, memo } from 'react'
+import { useState, useRef, useMemo, useEffect, Suspense, memo, Component } from 'react'
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber'
 import { Html, OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { PLANETS } from '../data/index.js'
 import { sfx } from '../hooks/useSfx.js'
+import { PlanetTextureLoader } from '../utils/planetTexture.js'
 import styles from './SolarSystem.module.css'
 
 // ── 1. GENERATOR TEKSTUR GLOBAL (Di-cache untuk performa tinggi) ───────
@@ -85,27 +86,33 @@ function getVibrantAtmosphere(planetName, defaultColor) {
   return vividColors[planetName] || defaultColor
 }
 
-// ── 2. Komponen Khusus Bumi (Sesuai Section Intro) ─────────────────────
-function EarthMesh({ radius }) {
-  const colorMap = useLoader(THREE.TextureLoader, '/images/earth.jpg')
-
-  useEffect(() => {
-    if (colorMap) {
-      colorMap.wrapS = THREE.RepeatWrapping;
-      colorMap.wrapT = THREE.RepeatWrapping;
-      colorMap.anisotropy = 16;
-    }
-  }, [colorMap]);
-
+// ── 2. Permukaan planet: tekstur foto, atau bola berwarna (fallback) ───
+// Material bertekstur: tanpa color (putih), karena color mengalikan tekstur.
+// Pengaturan tekstur (sRGB, anisotropy, wrap) ada di PlanetTextureLoader.
+function PlanetMesh({ radius, texture }) {
+  const colorMap = useLoader(PlanetTextureLoader, texture)
   return (
     <mesh castShadow receiveShadow>
       <sphereGeometry args={[radius, 48, 48]} />
-      <meshStandardMaterial
-        map={colorMap}
-        roughness={0.8}
-        metalness={0.2}
-        alphaTest={0.5}
-      />
+      <meshStandardMaterial map={colorMap} roughness={1} metalness={0} />
+    </mesh>
+  )
+}
+
+// Tangkap error tekstur (file hilang / gagal decode) per planet, supaya satu file
+// yang bermasalah tidak membuat seluruh Canvas kosong.
+class PlanetBoundary extends Component {
+  state = { failed: false }
+  static getDerivedStateFromError() { return { failed: true } }
+  componentDidCatch(err) { console.warn('Planet texture failed:', this.props.texture, err) }
+  render() { return this.state.failed ? this.props.fallback : this.props.children }
+}
+
+function PlanetFallback({ radius, color }) {
+  return (
+    <mesh castShadow receiveShadow>
+      <sphereGeometry args={[radius, 48, 48]} />
+      <meshStandardMaterial color={color || '#cccccc'} roughness={0.7} metalness={0.05} />
     </mesh>
   )
 }
@@ -253,7 +260,7 @@ function Planet3D({ data, index, labelHidden, onClick }) {
   const atmosphereColor = getVibrantAtmosphere(data.name, data.color)
 
   useFrame((state, delta) => {
-    if (planetGroup.current) planetGroup.current.rotation.y += 0.3 * delta
+    if (planetGroup.current) planetGroup.current.rotation.y += (data.spin ?? 0.2) * delta
     if (ringMesh.current) ringMesh.current.rotation.z -= 0.4 * delta
 
     if (glowSprite.current) {
@@ -277,7 +284,7 @@ function Planet3D({ data, index, labelHidden, onClick }) {
         />
       </sprite>
 
-      <group rotation={[Math.PI * 0.12, 0, Math.PI * 0.08]} ref={planetGroup}>
+      <group rotation={[Math.PI * (data.tilt ?? 0.12), 0, Math.PI * 0.08]} ref={planetGroup}>
 
         {/* Lapis 1: INTI GELAP (Optimasi segmen) */}
         <mesh>
@@ -294,18 +301,17 @@ function Planet3D({ data, index, labelHidden, onClick }) {
           onPointerOver={() => document.body.style.cursor = 'pointer'}
           onPointerOut={() => document.body.style.cursor = 'auto'}
         >
-          {data.name === 'Earth' ? (
-            <EarthMesh radius={radius} />
+          {data.texture ? (
+            <PlanetBoundary
+              texture={data.texture}
+              fallback={<PlanetFallback radius={radius} color={data.color} />}
+            >
+              <Suspense fallback={<PlanetFallback radius={radius} color={data.color} />}>
+                <PlanetMesh radius={radius} texture={data.texture} />
+              </Suspense>
+            </PlanetBoundary>
           ) : (
-            <mesh castShadow receiveShadow>
-              <sphereGeometry args={[radius, 48, 48]} />
-              <meshStandardMaterial
-                color={data.color || '#cccccc'}
-                roughness={0.7}
-                metalness={0.05}
-                alphaTest={0.5}
-              />
-            </mesh>
+            <PlanetFallback radius={radius} color={data.color} />
           )}
         </group>
 
@@ -315,22 +321,10 @@ function Planet3D({ data, index, labelHidden, onClick }) {
           <meshBasicMaterial
             color={atmosphereColor}
             transparent={true}
-            opacity={0.18}
+            opacity={0.08}
             blending={THREE.AdditiveBlending}
             depthWrite={false}
             side={THREE.FrontSide}
-          />
-        </mesh>
-
-        {/* Lapis 4: GARIS BORDER CINCIN */}
-        <mesh>
-          <ringGeometry args={[radius * 1.15, radius * 1.18, 48]} />
-          <meshBasicMaterial
-            color={atmosphereColor}
-            transparent={true}
-            opacity={0.25}
-            blending={THREE.AdditiveBlending}
-            side={THREE.DoubleSide}
           />
         </mesh>
 
@@ -348,7 +342,7 @@ function Planet3D({ data, index, labelHidden, onClick }) {
             onPointerOver={() => document.body.style.cursor = 'pointer'}
             onPointerOut={() => document.body.style.cursor = 'auto'}
           >
-            <ringGeometry args={[radius * 1.35, radius * 2.3, 64]} />
+            <ringGeometry args={[radius * (data.ringInner ?? 1.35), radius * 2.3, 64]} />
             <meshStandardMaterial
               color={data.color || '#ead6b8'}
               side={THREE.DoubleSide}
@@ -431,7 +425,7 @@ function SolarSystem({ onFact, onNext }) {
           camera={{ position: [0, 0, 26], fov: 40 }}
           onPointerMissed={handleBackgroundClick}
         >
-          <ambientLight intensity={0.05} color="#ffffff" />
+          <ambientLight intensity={0.15} color="#ffffff" />
 
           <directionalLight
             position={[-20, 6, 4]}
